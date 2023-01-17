@@ -47,6 +47,7 @@ func TestProvider_HasChildResources(t *testing.T) {
 		"azuredevops_serviceendpoint_jfrog_distribution_v2",
 		"azuredevops_serviceendpoint_jfrog_platform_v2",
 		"azuredevops_serviceendpoint_jfrog_xray_v2",
+		"azuredevops_serviceendpoint_externaltfs",
 		"azuredevops_variable_group",
 		"azuredevops_repository_policy_author_email_pattern",
 		"azuredevops_repository_policy_case_enforcement",
