@@ -54,7 +54,6 @@ The following arguments are supported:
 * `project_id` - (Required) The ID of the project.
 * `principal` - (Required) The **group** principal to assign the permissions.
 * `permissions` - (Required) the permissions to assign. The following permissions are available.
-* `variable_group_id` - (Required) The id of the variable group to assign the permissions.
 * `replace` - (Optional) Replace (`true`) or merge (`false`) the permissions. Default: `true`
 
 | Permission        | Description                         |
