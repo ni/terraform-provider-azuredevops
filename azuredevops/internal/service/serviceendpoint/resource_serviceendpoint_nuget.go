@@ -26,7 +26,7 @@ func ResourceServiceEndpointNuget() *schema.Resource {
 		Sensitive:        true,
 		DiffSuppressFunc: tfhelper.DiffFuncSuppressSecretChanged,
 		ValidateFunc:     validation.StringIsNotWhiteSpace,
-		Description:      "The access token for NuGet feed",
+		Description:      "The access token / ApiKey for NuGet feed",
 	}
 	// Add a spot in the schema to store the token secretly
 	stSecretHashKey, stSecretHashSchema := tfhelper.GenerateSecreteMemoSchema("access_token")

@@ -24,7 +24,7 @@ resource "azuredevops_serviceendpoint_nuget" "example" {
   project_id            = azuredevops_project.example.id
   service_endpoint_name = "Example NuGet"
   url                   = "https://api.nuget.org/v3/index.json"
-  access_token          = "00000000-0000-0000-0000-000000000000"
+  access_token          = "AbcDEf123_0x"
   description           = "Managed by Terraform"
 }
 ```
@@ -35,8 +35,8 @@ The following arguments are supported:
 
 - `project_id` - (Required) The ID of the project.
 - `service_endpoint_name` - (Required) The Service Endpoint name.
-- `url` - (Required) URL of the NuGet registry to connect with.
-- `access_token` - (Required) The access token for NuGet registry.
+- `url` - (Required) URL of the NuGet feed to connect with.
+- `access_token` - (Required) The access-token/ApiKey for NuGet feed.
 - `description` - (Optional) The Service Endpoint description.
 
 ## Attributes Reference
