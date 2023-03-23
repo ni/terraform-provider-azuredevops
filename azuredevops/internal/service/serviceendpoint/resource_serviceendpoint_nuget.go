@@ -1,6 +1,9 @@
 package serviceendpoint
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
@@ -9,28 +12,81 @@ import (
 	"github.com/microsoft/terraform-provider-azuredevops/azuredevops/internal/utils/tfhelper"
 )
 
-// ResourceServiceEndpointNuget schema and implementation for NuGet service endpoint resource
+// ResourceServiceEndpointNuget schema and implementation for Nuget service endpoint resource
 func ResourceServiceEndpointNuget() *schema.Resource {
-	r := genBaseServiceEndpointResource(flattenServiceEndpointNuget, expandServiceEndpointNuget)
+	r := genBaseServiceEndpointResource(flattenServiceEndpointArtifactory, expandServiceEndpointNuget)
 
 	r.Schema["url"] = &schema.Schema{
-		Type:         schema.TypeString,
-		Required:     true,
-		ValidateFunc: validation.IsURLWithHTTPorHTTPS,
-		Description:  "Url for the NuGet feed",
+		Type:     schema.TypeString,
+		Required: true,
+		ValidateFunc: func(i interface{}, key string) (_ []string, errors []error) {
+			url, ok := i.(string)
+			if !ok {
+				errors = append(errors, fmt.Errorf("expected type of %q to be string", key))
+				return
+			}
+			if strings.HasSuffix(url, "/") {
+				errors = append(errors, fmt.Errorf("%q should not end with slash, got %q.", key, url))
+				return
+			}
+			return validation.IsURLWithHTTPorHTTPS(url, key)
+		},
+		Description: "Url for the Nuget Feed",
 	}
 
-	r.Schema["access_token"] = &schema.Schema{
-		Type:             schema.TypeString,
-		Required:         true,
-		Sensitive:        true,
-		DiffSuppressFunc: tfhelper.DiffFuncSuppressSecretChanged,
-		ValidateFunc:     validation.StringIsNotWhiteSpace,
-		Description:      "The access token / ApiKey for NuGet feed",
+	patHashKey, patHashSchema := tfhelper.GenerateSecreteMemoSchema("token")
+	at := &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			"token": {
+				Description:      "The Nuget Feed access token.",
+				Type:             schema.TypeString,
+				Required:         true,
+				Sensitive:        true,
+				DiffSuppressFunc: tfhelper.DiffFuncSuppressSecretChanged,
+			},
+			patHashKey: patHashSchema,
+		},
 	}
-	// Add a spot in the schema to store the token secretly
-	stSecretHashKey, stSecretHashSchema := tfhelper.GenerateSecreteMemoSchema("access_token")
-	r.Schema[stSecretHashKey] = stSecretHashSchema
+
+	patHashKeyU, patHashSchemaU := tfhelper.GenerateSecreteMemoSchema("username")
+	patHashKeyP, patHashSchemaP := tfhelper.GenerateSecreteMemoSchema("password")
+	aup := &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			"username": {
+				Description:      "The Nuget feed user name.",
+				Type:             schema.TypeString,
+				Required:         true,
+				Sensitive:        true,
+				DiffSuppressFunc: tfhelper.DiffFuncSuppressSecretChanged,
+			},
+			patHashKeyU: patHashSchemaU,
+			"password": {
+				Description:      "The Nuget feed password.",
+				Type:             schema.TypeString,
+				Required:         true,
+				Sensitive:        true,
+				DiffSuppressFunc: tfhelper.DiffFuncSuppressSecretChanged,
+			},
+			patHashKeyP: patHashSchemaP,
+		},
+	}
+
+	r.Schema["authentication_token"] = &schema.Schema{
+		Type:         schema.TypeList,
+		Optional:     true,
+		MinItems:     1,
+		MaxItems:     1,
+		Elem:         at,
+		ExactlyOneOf: []string{"authentication_basic", "authentication_token"},
+	}
+
+	r.Schema["authentication_basic"] = &schema.Schema{
+		Type:     schema.TypeList,
+		Optional: true,
+		MinItems: 1,
+		MaxItems: 1,
+		Elem:     aup,
+	}
 
 	return r
 }
@@ -38,23 +94,26 @@ func ResourceServiceEndpointNuget() *schema.Resource {
 // Convert internal Terraform data structure to an AzDO data structure
 func expandServiceEndpointNuget(d *schema.ResourceData) (*serviceendpoint.ServiceEndpoint, *uuid.UUID, error) {
 	serviceEndpoint, projectID := doBaseExpansion(d)
-	serviceEndpoint.Authorization = &serviceendpoint.EndpointAuthorization{
-		Parameters: &map[string]string{
-			"apitoken": d.Get("access_token").(string),
-		},
-		Scheme: converter.String("Token"),
-	}
 	serviceEndpoint.Type = converter.String("externalnugetfeed")
 	serviceEndpoint.Url = converter.String(d.Get("url").(string))
+	authScheme := "Token"
+
+	authParams := make(map[string]string)
+
+	if x, ok := d.GetOk("authentication_token"); ok {
+		authScheme = "Token"
+		msi := x.([]interface{})[0].(map[string]interface{})
+		authParams["apitoken"] = expandSecret(msi, "token")
+	} else if x, ok := d.GetOk("authentication_basic"); ok {
+		authScheme = "UsernamePassword"
+		msi := x.([]interface{})[0].(map[string]interface{})
+		authParams["username"] = expandSecret(msi, "username")
+		authParams["password"] = expandSecret(msi, "password")
+	}
+	serviceEndpoint.Authorization = &serviceendpoint.EndpointAuthorization{
+		Parameters: &authParams,
+		Scheme:     &authScheme,
+	}
+
 	return serviceEndpoint, projectID, nil
-}
-
-// Convert AzDO data structure to internal Terraform data structure
-func flattenServiceEndpointNuget(d *schema.ResourceData, serviceEndpoint *serviceendpoint.ServiceEndpoint, projectID *uuid.UUID) {
-	doBaseFlattening(d, serviceEndpoint, projectID)
-
-	tfhelper.HelpFlattenSecret(d, "access_token")
-
-	d.Set("url", *serviceEndpoint.Url)
-	d.Set("access_token", (*serviceEndpoint.Authorization.Parameters)["apitoken"])
 }

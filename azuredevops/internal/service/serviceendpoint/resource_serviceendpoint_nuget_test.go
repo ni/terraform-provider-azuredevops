@@ -19,6 +19,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var nugetTestServiceEndpointIDpassword = uuid.New()
+var nugetRandomServiceEndpointProjectIDpassword = uuid.New()
+var nugetTestServiceEndpointProjectIDpassword = &nugetRandomServiceEndpointProjectID
+
+var nugetTestServiceEndpointPassword = serviceendpoint.ServiceEndpoint{
+	Authorization: &serviceendpoint.EndpointAuthorization{
+		Parameters: &map[string]string{
+			"username": "NUGET_TEST_username",
+			"password": "NUGET_TEST_password",
+		},
+		Scheme: converter.String("UsernamePassword"),
+	},
+	Id:    &nugetTestServiceEndpointIDpassword,
+	Name:  converter.String("UNIT_TEST_CONN_NAME"),
+	Owner: converter.String("library"), // Supported values are "library", "agentcloud"
+	Type:  converter.String("externalnugetfeed"),
+	Url:   converter.String("https://api.nuget.org/v3/index.json"),
+	ServiceEndpointProjectReferences: &[]serviceendpoint.ServiceEndpointProjectReference{
+		{
+			ProjectReference: &serviceendpoint.ProjectReference{
+				Id: nugetTestServiceEndpointProjectIDpassword,
+			},
+			Name:        converter.String("UNIT_TEST_CONN_NAME"),
+			Description: converter.String("UNIT_TEST_CONN_DESCRIPTION"),
+		},
+	},
+}
+
 var nugetTestServiceEndpointID = uuid.New()
 var nugetRandomServiceEndpointProjectID = uuid.New()
 var nugetTestServiceEndpointProjectID = &nugetRandomServiceEndpointProjectID
@@ -26,13 +54,13 @@ var nugetTestServiceEndpointProjectID = &nugetRandomServiceEndpointProjectID
 var nugetTestServiceEndpoint = serviceendpoint.ServiceEndpoint{
 	Authorization: &serviceendpoint.EndpointAuthorization{
 		Parameters: &map[string]string{
-			"apitoken": "NUGET_TEST_access_token",
+			"apitoken": "AR_TEST_token",
 		},
 		Scheme: converter.String("Token"),
 	},
 	Id:    &nugetTestServiceEndpointID,
 	Name:  converter.String("UNIT_TEST_CONN_NAME"),
-	Owner: converter.String("library"),
+	Owner: converter.String("library"), // Supported values are "library", "agentcloud"
 	Type:  converter.String("externalnugetfeed"),
 	Url:   converter.String("https://api.nuget.org/v3/index.json"),
 	ServiceEndpointProjectReferences: &[]serviceendpoint.ServiceEndpointProjectReference{
@@ -47,30 +75,40 @@ var nugetTestServiceEndpoint = serviceendpoint.ServiceEndpoint{
 }
 
 // verifies that the flatten/expand round trip yields the same service endpoint
-func TestServiceEndpointNuget_ExpandFlatten_Roundtrip(t *testing.T) {
-	resourceData := schema.TestResourceDataRaw(t, ResourceServiceEndpointNuget().Schema, nil)
-	flattenServiceEndpointNuget(resourceData, &nugetTestServiceEndpoint, nugetTestServiceEndpointProjectID)
+func testServiceEndpointNuget_ExpandFlatten_Roundtrip(t *testing.T, ep *serviceendpoint.ServiceEndpoint, id *uuid.UUID) {
+	for _, ep := range []*serviceendpoint.ServiceEndpoint{ep, ep} {
 
-	serviceEndpointAfterRoundTrip, projectID, err := expandServiceEndpointNuget(resourceData)
+		resourceData := schema.TestResourceDataRaw(t, ResourceServiceEndpointNuget().Schema, nil)
+		flattenServiceEndpointNuget(resourceData, ep, id)
 
-	require.Equal(t, nugetTestServiceEndpoint, *serviceEndpointAfterRoundTrip)
-	require.Equal(t, nugetTestServiceEndpointProjectID, projectID)
-	require.Nil(t, err)
+		serviceEndpointAfterRoundTrip, projectID, err := expandServiceEndpointNuget(resourceData)
+		require.Nil(t, err)
+		require.Equal(t, *ep, *serviceEndpointAfterRoundTrip)
+		require.Equal(t, id, projectID)
+
+	}
+}
+func TestServiceEndpointNuget_ExpandFlatten_RoundtripPassword(t *testing.T) {
+	testServiceEndpointNuget_ExpandFlatten_Roundtrip(t, &nugetTestServiceEndpointPassword, nugetTestServiceEndpointProjectIDpassword)
+}
+
+func TestServiceEndpointNuget_ExpandFlatten_RoundtripToken(t *testing.T) {
+	testServiceEndpointNuget_ExpandFlatten_Roundtrip(t, &nugetTestServiceEndpoint, nugetTestServiceEndpointProjectID)
 }
 
 // verifies that if an error is produced on create, the error is not swallowed
-func TestServiceEndpointNuget_Create_DoesNotSwallowError(t *testing.T) {
+func testServiceEndpointNuget_Create_DoesNotSwallowError(t *testing.T, ep *serviceendpoint.ServiceEndpoint, id *uuid.UUID) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	r := ResourceServiceEndpointNuget()
 	resourceData := schema.TestResourceDataRaw(t, r.Schema, nil)
-	flattenServiceEndpointNuget(resourceData, &nugetTestServiceEndpoint, nugetTestServiceEndpointProjectID)
+	flattenServiceEndpointNuget(resourceData, ep, id)
 
 	buildClient := azdosdkmocks.NewMockServiceendpointClient(ctrl)
 	clients := &client.AggregatedClient{ServiceEndpointClient: buildClient, Ctx: context.Background()}
 
-	expectedArgs := serviceendpoint.CreateServiceEndpointArgs{Endpoint: &nugetTestServiceEndpoint}
+	expectedArgs := serviceendpoint.CreateServiceEndpointArgs{Endpoint: ep}
 	buildClient.
 		EXPECT().
 		CreateServiceEndpoint(clients.Ctx, expectedArgs).
@@ -80,22 +118,28 @@ func TestServiceEndpointNuget_Create_DoesNotSwallowError(t *testing.T) {
 	err := r.Create(resourceData, clients)
 	require.Contains(t, err.Error(), "CreateServiceEndpoint() Failed")
 }
+func TestServiceEndpointNuget_Create_DoesNotSwallowErrorToken(t *testing.T) {
+	testServiceEndpointNuget_Create_DoesNotSwallowError(t, &nugetTestServiceEndpoint, nugetTestServiceEndpointProjectID)
+}
+func TestServiceEndpointNuget_Create_DoesNotSwallowErrorPassword(t *testing.T) {
+	testServiceEndpointNuget_Create_DoesNotSwallowError(t, &nugetTestServiceEndpointPassword, nugetTestServiceEndpointProjectIDpassword)
+}
 
 // verifies that if an error is produced on a read, it is not swallowed
-func TestServiceEndpointNuget_Read_DoesNotSwallowError(t *testing.T) {
+func testServiceEndpointNuget_Read_DoesNotSwallowError(t *testing.T, ep *serviceendpoint.ServiceEndpoint, id *uuid.UUID) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	r := ResourceServiceEndpointNuget()
 	resourceData := schema.TestResourceDataRaw(t, r.Schema, nil)
-	flattenServiceEndpointNuget(resourceData, &nugetTestServiceEndpoint, nugetTestServiceEndpointProjectID)
+	flattenServiceEndpointNuget(resourceData, ep, id)
 
 	buildClient := azdosdkmocks.NewMockServiceendpointClient(ctrl)
 	clients := &client.AggregatedClient{ServiceEndpointClient: buildClient, Ctx: context.Background()}
 
 	expectedArgs := serviceendpoint.GetServiceEndpointDetailsArgs{
-		EndpointId: nugetTestServiceEndpoint.Id,
-		Project:    converter.String(nugetTestServiceEndpointProjectID.String()),
+		EndpointId: ep.Id,
+		Project:    converter.String(id.String()),
 	}
 	buildClient.
 		EXPECT().
@@ -106,23 +150,29 @@ func TestServiceEndpointNuget_Read_DoesNotSwallowError(t *testing.T) {
 	err := r.Read(resourceData, clients)
 	require.Contains(t, err.Error(), "GetServiceEndpoint() Failed")
 }
+func TestServiceEndpointNuget_Read_DoesNotSwallowErrorToken(t *testing.T) {
+	testServiceEndpointNuget_Read_DoesNotSwallowError(t, &nugetTestServiceEndpoint, nugetTestServiceEndpointProjectID)
+}
+func TestServiceEndpointNuget_Read_DoesNotSwallowErrorPassword(t *testing.T) {
+	testServiceEndpointNuget_Read_DoesNotSwallowError(t, &nugetTestServiceEndpointPassword, nugetTestServiceEndpointProjectIDpassword)
+}
 
 // verifies that if an error is produced on a delete, it is not swallowed
-func TestServiceEndpointNuget_Delete_DoesNotSwallowError(t *testing.T) {
+func testServiceEndpointNuget_Delete_DoesNotSwallowError(t *testing.T, ep *serviceendpoint.ServiceEndpoint, id *uuid.UUID) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	r := ResourceServiceEndpointNuget()
 	resourceData := schema.TestResourceDataRaw(t, r.Schema, nil)
-	flattenServiceEndpointNuget(resourceData, &nugetTestServiceEndpoint, nugetTestServiceEndpointProjectID)
+	flattenServiceEndpointNuget(resourceData, ep, id)
 
 	buildClient := azdosdkmocks.NewMockServiceendpointClient(ctrl)
 	clients := &client.AggregatedClient{ServiceEndpointClient: buildClient, Ctx: context.Background()}
 
 	expectedArgs := serviceendpoint.DeleteServiceEndpointArgs{
-		EndpointId: nugetTestServiceEndpoint.Id,
+		EndpointId: ep.Id,
 		ProjectIds: &[]string{
-			nugetTestServiceEndpointProjectID.String(),
+			id.String(),
 		},
 	}
 	buildClient.
@@ -134,22 +184,28 @@ func TestServiceEndpointNuget_Delete_DoesNotSwallowError(t *testing.T) {
 	err := r.Delete(resourceData, clients)
 	require.Contains(t, err.Error(), "DeleteServiceEndpoint() Failed")
 }
+func TestServiceEndpointNuget_Delete_DoesNotSwallowErrorToken(t *testing.T) {
+	testServiceEndpointNuget_Delete_DoesNotSwallowError(t, &nugetTestServiceEndpoint, nugetTestServiceEndpointProjectID)
+}
+func TestServiceEndpointNuget_Delete_DoesNotSwallowErrorPassword(t *testing.T) {
+	testServiceEndpointNuget_Delete_DoesNotSwallowError(t, &nugetTestServiceEndpointPassword, nugetTestServiceEndpointProjectIDpassword)
+}
 
 // verifies that if an error is produced on an update, it is not swallowed
-func TestServiceEndpointNuget_Update_DoesNotSwallowError(t *testing.T) {
+func testServiceEndpointNuget_Update_DoesNotSwallowError(t *testing.T, ep *serviceendpoint.ServiceEndpoint, id *uuid.UUID) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	r := ResourceServiceEndpointNuget()
 	resourceData := schema.TestResourceDataRaw(t, r.Schema, nil)
-	flattenServiceEndpointNuget(resourceData, &nugetTestServiceEndpoint, nugetTestServiceEndpointProjectID)
+	flattenServiceEndpointNuget(resourceData, ep, id)
 
 	buildClient := azdosdkmocks.NewMockServiceendpointClient(ctrl)
 	clients := &client.AggregatedClient{ServiceEndpointClient: buildClient, Ctx: context.Background()}
 
 	expectedArgs := serviceendpoint.UpdateServiceEndpointArgs{
-		Endpoint:   &nugetTestServiceEndpoint,
-		EndpointId: nugetTestServiceEndpoint.Id,
+		Endpoint:   ep,
+		EndpointId: ep.Id,
 	}
 
 	buildClient.
@@ -160,4 +216,10 @@ func TestServiceEndpointNuget_Update_DoesNotSwallowError(t *testing.T) {
 
 	err := r.Update(resourceData, clients)
 	require.Contains(t, err.Error(), "UpdateServiceEndpoint() Failed")
+}
+func TestServiceEndpointNuget_Update_DoesNotSwallowErrorToken(t *testing.T) {
+	testServiceEndpointNuget_Delete_DoesNotSwallowError(t, &nugetTestServiceEndpoint, nugetTestServiceEndpointProjectID)
+}
+func TestServiceEndpointNuget_Update_DoesNotSwallowErrorPassword(t *testing.T) {
+	testServiceEndpointNuget_Delete_DoesNotSwallowError(t, &nugetTestServiceEndpointPassword, nugetTestServiceEndpointProjectIDpassword)
 }
