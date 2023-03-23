@@ -6,9 +6,12 @@ description: |-
 ---
 
 # azuredevops_serviceendpoint_nuget
+
 Manages a NuGet service endpoint within Azure DevOps.
 
 ## Example Usage
+
+One of the meta-argument blocks `authentication_token` or `authentication_basic` or `authentication_none` needs to be used.
 
 ```hcl
 resource "azuredevops_project" "example" {
@@ -19,7 +22,7 @@ resource "azuredevops_project" "example" {
   description        = "Managed by Terraform"
 }
 
-resource "azuredevops_serviceendpoint_nuget" "example" {
+resource "azuredevops_serviceendpoint_nuget" "example_authentication_token" {
   project_id            = azuredevops_project.example.id
   service_endpoint_name = "Example NuGet"
   description           = "Managed by Terraform"
@@ -28,19 +31,8 @@ resource "azuredevops_serviceendpoint_nuget" "example" {
     token = "AbcDEf123_0x"
   }
 }
-```
-Alternatively a username and password may be used.
 
-```hcl
-resource "azuredevops_project" "example" {
-  name               = "Example Project"
-  visibility         = "private"
-  version_control    = "Git"
-  work_item_template = "Agile"
-  description        = "Managed by Terraform"
-}
-
-resource "azuredevops_serviceendpoint_nuget" "example" {
+resource "azuredevops_serviceendpoint_nuget" "example_authentication_basic" {
   project_id            = azuredevops_project.example.id
   service_endpoint_name = "Example NuGet"
   description           = "Managed by Terraform"
@@ -48,6 +40,16 @@ resource "azuredevops_serviceendpoint_nuget" "example" {
   authentication_basic {
     username = "username"
     password = "password"
+  }
+}
+
+resource "azuredevops_serviceendpoint_nuget" "example_authentication_none" {
+  project_id            = azuredevops_project.example.id
+  service_endpoint_name = "Example NuGet"
+  description           = "Managed by Terraform"
+  url                   = "https://api.nuget.org/v3/index.json"
+  authentication_none {
+    key = "AbcDEf123_0x"
   }
 }
 ```
@@ -58,15 +60,17 @@ The following arguments are supported:
 
 - `project_id` - (Required) The ID of the project.
 - `service_endpoint_name` - (Required) The Service Endpoint name.
-- `url` - (Required) URL of the NuGet feed to connect with.
-- `access_token` - (Required) The access-token/ApiKey for NuGet feed.
-   _Note: URL should not end in a slash character._
-* either `authentication_token` or `authentication_basic` (one is required)
-  * `authentication_token`
-    * `token` - Authentication Token generated through Artifactory.
-  * `authentication_basic`
-      * `username` - Artifactory Username.
-      * `password` - Artifactory Password.
+- `url` - (Required) URL for the feed. This will generally end with index.json. For nuget.org, use https://api.nuget.org/v3/index.json.
+  _Note: URL should not end in a slash character._
+
+* either `authentication_token` or `authentication_basic` or `authentication_none` (one is required)
+  - `authentication_token`
+    - `token` - Personal access tokens are applicable only for NuGet feeds hosted on other Azure DevOps Services organizations or Azure DevOps Server 2019 (or later).
+  - `authentication_basic`
+    - `username` - Username for connecting to the endpoint.
+    - `password` - Password for connecting to the endpoint.
+  - `authentication_none`
+    - `key` - ApiKey (only for push).
 * `description` - (Optional) The Service Endpoint description.
 
 ## Attributes Reference

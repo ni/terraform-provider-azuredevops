@@ -34,6 +34,20 @@ func ResourceServiceEndpointNuget() *schema.Resource {
 		Description: "Url for the Nuget Feed",
 	}
 
+	keyHashKey, keyHashSchema := tfhelper.GenerateSecreteMemoSchema("key")
+	ak := &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			"token": {
+				Description:      "The Nuget Feed API key.",
+				Type:             schema.TypeString,
+				Required:         true,
+				Sensitive:        true,
+				DiffSuppressFunc: tfhelper.DiffFuncSuppressSecretChanged,
+			},
+			keyHashKey: keyHashSchema,
+		},
+	}
+
 	patHashKey, patHashSchema := tfhelper.GenerateSecreteMemoSchema("token")
 	at := &schema.Resource{
 		Schema: map[string]*schema.Schema{
@@ -77,7 +91,7 @@ func ResourceServiceEndpointNuget() *schema.Resource {
 		MinItems:     1,
 		MaxItems:     1,
 		Elem:         at,
-		ExactlyOneOf: []string{"authentication_basic", "authentication_token"},
+		ExactlyOneOf: []string{"authentication_basic", "authentication_token", "authentication_none"},
 	}
 
 	r.Schema["authentication_basic"] = &schema.Schema{
@@ -86,6 +100,14 @@ func ResourceServiceEndpointNuget() *schema.Resource {
 		MinItems: 1,
 		MaxItems: 1,
 		Elem:     aup,
+	}
+
+	r.Schema["authentication_none"] = &schema.Schema{
+		Type:     schema.TypeList,
+		Optional: true,
+		MinItems: 1,
+		MaxItems: 1,
+		Elem:     ak,
 	}
 
 	return r
@@ -109,6 +131,10 @@ func expandServiceEndpointNuget(d *schema.ResourceData) (*serviceendpoint.Servic
 		msi := x.([]interface{})[0].(map[string]interface{})
 		authParams["username"] = expandSecret(msi, "username")
 		authParams["password"] = expandSecret(msi, "password")
+	} else if x, ok := d.GetOk("authentication_none"); ok {
+		authScheme = "Token"
+		msi := x.([]interface{})[0].(map[string]interface{})
+		authParams["nugetkey"] = expandSecret(msi, "key")
 	}
 	serviceEndpoint.Authorization = &serviceendpoint.EndpointAuthorization{
 		Parameters: &authParams,
