@@ -25,12 +25,11 @@ func ResourceServiceEndpointGeneric() *schema.Resource {
 		Optional:    true,
 	}
 	r.Schema["password"] = &schema.Schema{
-		Type:             schema.TypeString,
-		DefaultFunc:      schema.EnvDefaultFunc("AZDO_GENERIC_SERVICE_CONNECTION_PASSWORD", nil),
-		Description:      "The password or token key to use for the generic service connection.",
-		Sensitive:        true,
-		Optional:         true,
-		DiffSuppressFunc: tfhelper.DiffFuncSuppressSecretChanged,
+		Type:        schema.TypeString,
+		DefaultFunc: schema.EnvDefaultFunc("AZDO_GENERIC_SERVICE_CONNECTION_PASSWORD", nil),
+		Description: "The password or token key to use for the generic service connection.",
+		Sensitive:   true,
+		Optional:    true,
 	}
 	secretHashKey, secretHashSchema := tfhelper.GenerateSecreteMemoSchema("password")
 	r.Schema[secretHashKey] = secretHashSchema
