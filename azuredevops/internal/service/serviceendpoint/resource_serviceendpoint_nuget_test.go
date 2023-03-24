@@ -54,7 +54,7 @@ var nugetTestServiceEndpointProjectID = &nugetRandomServiceEndpointProjectID
 var nugetTestServiceEndpoint = serviceendpoint.ServiceEndpoint{
 	Authorization: &serviceendpoint.EndpointAuthorization{
 		Parameters: &map[string]string{
-			"apitoken": "AR_TEST_token",
+			"apitoken": "NUGET_TEST_token",
 		},
 		Scheme: converter.String("Token"),
 	},

@@ -14,7 +14,7 @@ import (
 
 // ResourceServiceEndpointNuget schema and implementation for Nuget service endpoint resource
 func ResourceServiceEndpointNuget() *schema.Resource {
-	r := genBaseServiceEndpointResource(flattenServiceEndpointArtifactory, expandServiceEndpointNuget)
+	r := genBaseServiceEndpointResource(flattenServiceEndpointNuget, expandServiceEndpointNuget)
 
 	r.Schema["url"] = &schema.Schema{
 		Type:     schema.TypeString,
@@ -34,20 +34,6 @@ func ResourceServiceEndpointNuget() *schema.Resource {
 		Description: "Url for the Nuget Feed",
 	}
 
-	keyHashKey, keyHashSchema := tfhelper.GenerateSecreteMemoSchema("key")
-	ak := &schema.Resource{
-		Schema: map[string]*schema.Schema{
-			"token": {
-				Description:      "The Nuget Feed API key.",
-				Type:             schema.TypeString,
-				Required:         true,
-				Sensitive:        true,
-				DiffSuppressFunc: tfhelper.DiffFuncSuppressSecretChanged,
-			},
-			keyHashKey: keyHashSchema,
-		},
-	}
-
 	patHashKey, patHashSchema := tfhelper.GenerateSecreteMemoSchema("token")
 	at := &schema.Resource{
 		Schema: map[string]*schema.Schema{
@@ -59,6 +45,20 @@ func ResourceServiceEndpointNuget() *schema.Resource {
 				DiffSuppressFunc: tfhelper.DiffFuncSuppressSecretChanged,
 			},
 			patHashKey: patHashSchema,
+		},
+	}
+
+	keyHashKey, keyHashSchema := tfhelper.GenerateSecreteMemoSchema("key")
+	ak := &schema.Resource{
+		Schema: map[string]*schema.Schema{
+			"key": {
+				Description:      "The Nuget Feed API key.",
+				Type:             schema.TypeString,
+				Required:         true,
+				Sensitive:        true,
+				DiffSuppressFunc: tfhelper.DiffFuncSuppressSecretChanged,
+			},
+			keyHashKey: keyHashSchema,
 		},
 	}
 
@@ -94,20 +94,20 @@ func ResourceServiceEndpointNuget() *schema.Resource {
 		ExactlyOneOf: []string{"authentication_basic", "authentication_token", "authentication_none"},
 	}
 
-	r.Schema["authentication_basic"] = &schema.Schema{
-		Type:     schema.TypeList,
-		Optional: true,
-		MinItems: 1,
-		MaxItems: 1,
-		Elem:     aup,
-	}
-
 	r.Schema["authentication_none"] = &schema.Schema{
 		Type:     schema.TypeList,
 		Optional: true,
 		MinItems: 1,
 		MaxItems: 1,
 		Elem:     ak,
+	}
+
+	r.Schema["authentication_basic"] = &schema.Schema{
+		Type:     schema.TypeList,
+		Optional: true,
+		MinItems: 1,
+		MaxItems: 1,
+		Elem:     aup,
 	}
 
 	return r
@@ -126,15 +126,15 @@ func expandServiceEndpointNuget(d *schema.ResourceData) (*serviceendpoint.Servic
 		authScheme = "Token"
 		msi := x.([]interface{})[0].(map[string]interface{})
 		authParams["apitoken"] = expandSecret(msi, "token")
+	} else if x, ok := d.GetOk("authentication_none"); ok {
+		authScheme = "Key"
+		msi := x.([]interface{})[0].(map[string]interface{})
+		authParams["nugetkey"] = expandSecret(msi, "key")
 	} else if x, ok := d.GetOk("authentication_basic"); ok {
 		authScheme = "UsernamePassword"
 		msi := x.([]interface{})[0].(map[string]interface{})
 		authParams["username"] = expandSecret(msi, "username")
 		authParams["password"] = expandSecret(msi, "password")
-	} else if x, ok := d.GetOk("authentication_none"); ok {
-		authScheme = "Token"
-		msi := x.([]interface{})[0].(map[string]interface{})
-		authParams["nugetkey"] = expandSecret(msi, "key")
 	}
 	serviceEndpoint.Authorization = &serviceendpoint.EndpointAuthorization{
 		Parameters: &authParams,
@@ -142,4 +142,56 @@ func expandServiceEndpointNuget(d *schema.ResourceData) (*serviceendpoint.Servic
 	}
 
 	return serviceEndpoint, projectID, nil
+}
+
+// Convert AzDO data structure to internal Terraform data structure
+func flattenServiceEndpointNuget(d *schema.ResourceData, serviceEndpoint *serviceendpoint.ServiceEndpoint, projectID *uuid.UUID) {
+	doBaseFlattening(d, serviceEndpoint, projectID)
+	if strings.EqualFold(*serviceEndpoint.Authorization.Scheme, "Token") {
+		auth := make(map[string]interface{})
+		if x, ok := d.GetOk("authentication_token"); ok {
+			authList := x.([]interface{})[0].(map[string]interface{})
+			if len(authList) > 0 {
+				newHash, hashKey := tfhelper.HelpFlattenSecretNested(d, "authentication_token", authList, "token")
+				auth[hashKey] = newHash
+			}
+		}
+		if serviceEndpoint.Authorization != nil && serviceEndpoint.Authorization.Parameters != nil {
+			auth["token"] = (*serviceEndpoint.Authorization.Parameters)["apitoken"]
+		}
+		d.Set("authentication_token", []interface{}{auth})
+	} else if strings.EqualFold(*serviceEndpoint.Authorization.Scheme, "Key") {
+		auth := make(map[string]interface{})
+		if x, ok := d.GetOk("authentication_none"); ok {
+			authList := x.([]interface{})[0].(map[string]interface{})
+			if len(authList) > 0 {
+				newHash, hashKey := tfhelper.HelpFlattenSecretNested(d, "authentication_none", authList, "key")
+				auth[hashKey] = newHash
+			}
+		}
+		if serviceEndpoint.Authorization != nil && serviceEndpoint.Authorization.Parameters != nil {
+			auth["key"] = (*serviceEndpoint.Authorization.Parameters)["nugetkey"]
+		}
+		d.Set("authentication_none", []interface{}{auth})
+	} else if strings.EqualFold(*serviceEndpoint.Authorization.Scheme, "UsernamePassword") {
+		auth := make(map[string]interface{})
+		if old, ok := d.GetOk("authentication_basic"); ok {
+			oldAuthList := old.([]interface{})[0].(map[string]interface{})
+			if len(oldAuthList) > 0 {
+				newHash, hashKey := tfhelper.HelpFlattenSecretNested(d, "authentication_basic", oldAuthList, "password")
+				auth[hashKey] = newHash
+				newHash, hashKey = tfhelper.HelpFlattenSecretNested(d, "authentication_basic", oldAuthList, "username")
+				auth[hashKey] = newHash
+			}
+		}
+		if serviceEndpoint.Authorization != nil && serviceEndpoint.Authorization.Parameters != nil {
+			auth["password"] = (*serviceEndpoint.Authorization.Parameters)["password"]
+			auth["username"] = (*serviceEndpoint.Authorization.Parameters)["username"]
+		}
+		d.Set("authentication_basic", []interface{}{auth})
+	} else {
+		panic(fmt.Errorf("inconsistent authorization scheme. Expected: (Token, UsernamePassword)  , but got %s", *serviceEndpoint.Authorization.Scheme))
+	}
+
+	d.Set("url", *serviceEndpoint.Url)
 }
