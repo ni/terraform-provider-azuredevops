@@ -51,12 +51,35 @@ var nugetTestServiceEndpointID = uuid.New()
 var nugetRandomServiceEndpointProjectID = uuid.New()
 var nugetTestServiceEndpointProjectID = &nugetRandomServiceEndpointProjectID
 
-var nugetTestServiceEndpoint = serviceendpoint.ServiceEndpoint{
+var nugetTestServiceEndpointToken = serviceendpoint.ServiceEndpoint{
 	Authorization: &serviceendpoint.EndpointAuthorization{
 		Parameters: &map[string]string{
 			"apitoken": "NUGET_TEST_token",
 		},
 		Scheme: converter.String("Token"),
+	},
+	Id:    &nugetTestServiceEndpointID,
+	Name:  converter.String("UNIT_TEST_CONN_NAME"),
+	Owner: converter.String("library"), // Supported values are "library", "agentcloud"
+	Type:  converter.String("externalnugetfeed"),
+	Url:   converter.String("https://api.nuget.org/v3/index.json"),
+	ServiceEndpointProjectReferences: &[]serviceendpoint.ServiceEndpointProjectReference{
+		{
+			ProjectReference: &serviceendpoint.ProjectReference{
+				Id: nugetTestServiceEndpointProjectID,
+			},
+			Name:        converter.String("UNIT_TEST_CONN_NAME"),
+			Description: converter.String("UNIT_TEST_CONN_DESCRIPTION"),
+		},
+	},
+}
+
+var nugetTestServiceEndpointKey = serviceendpoint.ServiceEndpoint{
+	Authorization: &serviceendpoint.EndpointAuthorization{
+		Parameters: &map[string]string{
+			"nugetkey": "NUGET_TEST_key",
+		},
+		Scheme: converter.String("None"),
 	},
 	Id:    &nugetTestServiceEndpointID,
 	Name:  converter.String("UNIT_TEST_CONN_NAME"),
@@ -91,9 +114,11 @@ func testServiceEndpointNuget_ExpandFlatten_Roundtrip(t *testing.T, ep *servicee
 func TestServiceEndpointNuget_ExpandFlatten_RoundtripPassword(t *testing.T) {
 	testServiceEndpointNuget_ExpandFlatten_Roundtrip(t, &nugetTestServiceEndpointPassword, nugetTestServiceEndpointProjectIDpassword)
 }
-
 func TestServiceEndpointNuget_ExpandFlatten_RoundtripToken(t *testing.T) {
-	testServiceEndpointNuget_ExpandFlatten_Roundtrip(t, &nugetTestServiceEndpoint, nugetTestServiceEndpointProjectID)
+	testServiceEndpointNuget_ExpandFlatten_Roundtrip(t, &nugetTestServiceEndpointToken, nugetTestServiceEndpointProjectID)
+}
+func TestServiceEndpointNuget_ExpandFlatten_RoundtripKey(t *testing.T) {
+	testServiceEndpointNuget_ExpandFlatten_Roundtrip(t, &nugetTestServiceEndpointKey, nugetTestServiceEndpointProjectID)
 }
 
 // verifies that if an error is produced on create, the error is not swallowed
@@ -119,7 +144,10 @@ func testServiceEndpointNuget_Create_DoesNotSwallowError(t *testing.T, ep *servi
 	require.Contains(t, err.Error(), "CreateServiceEndpoint() Failed")
 }
 func TestServiceEndpointNuget_Create_DoesNotSwallowErrorToken(t *testing.T) {
-	testServiceEndpointNuget_Create_DoesNotSwallowError(t, &nugetTestServiceEndpoint, nugetTestServiceEndpointProjectID)
+	testServiceEndpointNuget_Create_DoesNotSwallowError(t, &nugetTestServiceEndpointToken, nugetTestServiceEndpointProjectID)
+}
+func TestServiceEndpointNuget_Create_DoesNotSwallowErrorKey(t *testing.T) {
+	testServiceEndpointNuget_Create_DoesNotSwallowError(t, &nugetTestServiceEndpointKey, nugetTestServiceEndpointProjectID)
 }
 func TestServiceEndpointNuget_Create_DoesNotSwallowErrorPassword(t *testing.T) {
 	testServiceEndpointNuget_Create_DoesNotSwallowError(t, &nugetTestServiceEndpointPassword, nugetTestServiceEndpointProjectIDpassword)
@@ -151,7 +179,10 @@ func testServiceEndpointNuget_Read_DoesNotSwallowError(t *testing.T, ep *service
 	require.Contains(t, err.Error(), "GetServiceEndpoint() Failed")
 }
 func TestServiceEndpointNuget_Read_DoesNotSwallowErrorToken(t *testing.T) {
-	testServiceEndpointNuget_Read_DoesNotSwallowError(t, &nugetTestServiceEndpoint, nugetTestServiceEndpointProjectID)
+	testServiceEndpointNuget_Read_DoesNotSwallowError(t, &nugetTestServiceEndpointToken, nugetTestServiceEndpointProjectID)
+}
+func TestServiceEndpointNuget_Read_DoesNotSwallowErrorKey(t *testing.T) {
+	testServiceEndpointNuget_Read_DoesNotSwallowError(t, &nugetTestServiceEndpointKey, nugetTestServiceEndpointProjectID)
 }
 func TestServiceEndpointNuget_Read_DoesNotSwallowErrorPassword(t *testing.T) {
 	testServiceEndpointNuget_Read_DoesNotSwallowError(t, &nugetTestServiceEndpointPassword, nugetTestServiceEndpointProjectIDpassword)
@@ -185,7 +216,10 @@ func testServiceEndpointNuget_Delete_DoesNotSwallowError(t *testing.T, ep *servi
 	require.Contains(t, err.Error(), "DeleteServiceEndpoint() Failed")
 }
 func TestServiceEndpointNuget_Delete_DoesNotSwallowErrorToken(t *testing.T) {
-	testServiceEndpointNuget_Delete_DoesNotSwallowError(t, &nugetTestServiceEndpoint, nugetTestServiceEndpointProjectID)
+	testServiceEndpointNuget_Delete_DoesNotSwallowError(t, &nugetTestServiceEndpointToken, nugetTestServiceEndpointProjectID)
+}
+func TestServiceEndpointNuget_Delete_DoesNotSwallowErrorKey(t *testing.T) {
+	testServiceEndpointNuget_Delete_DoesNotSwallowError(t, &nugetTestServiceEndpointKey, nugetTestServiceEndpointProjectID)
 }
 func TestServiceEndpointNuget_Delete_DoesNotSwallowErrorPassword(t *testing.T) {
 	testServiceEndpointNuget_Delete_DoesNotSwallowError(t, &nugetTestServiceEndpointPassword, nugetTestServiceEndpointProjectIDpassword)
@@ -218,7 +252,10 @@ func testServiceEndpointNuget_Update_DoesNotSwallowError(t *testing.T, ep *servi
 	require.Contains(t, err.Error(), "UpdateServiceEndpoint() Failed")
 }
 func TestServiceEndpointNuget_Update_DoesNotSwallowErrorToken(t *testing.T) {
-	testServiceEndpointNuget_Delete_DoesNotSwallowError(t, &nugetTestServiceEndpoint, nugetTestServiceEndpointProjectID)
+	testServiceEndpointNuget_Delete_DoesNotSwallowError(t, &nugetTestServiceEndpointToken, nugetTestServiceEndpointProjectID)
+}
+func TestServiceEndpointNuget_Update_DoesNotSwallowErrorKey(t *testing.T) {
+	testServiceEndpointNuget_Delete_DoesNotSwallowError(t, &nugetTestServiceEndpointKey, nugetTestServiceEndpointProjectID)
 }
 func TestServiceEndpointNuget_Update_DoesNotSwallowErrorPassword(t *testing.T) {
 	testServiceEndpointNuget_Delete_DoesNotSwallowError(t, &nugetTestServiceEndpointPassword, nugetTestServiceEndpointProjectIDpassword)

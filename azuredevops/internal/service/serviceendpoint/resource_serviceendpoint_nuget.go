@@ -127,7 +127,7 @@ func expandServiceEndpointNuget(d *schema.ResourceData) (*serviceendpoint.Servic
 		msi := x.([]interface{})[0].(map[string]interface{})
 		authParams["apitoken"] = expandSecret(msi, "token")
 	} else if x, ok := d.GetOk("authentication_none"); ok {
-		authScheme = "Key"
+		authScheme = "None"
 		msi := x.([]interface{})[0].(map[string]interface{})
 		authParams["nugetkey"] = expandSecret(msi, "key")
 	} else if x, ok := d.GetOk("authentication_basic"); ok {
@@ -160,7 +160,7 @@ func flattenServiceEndpointNuget(d *schema.ResourceData, serviceEndpoint *servic
 			auth["token"] = (*serviceEndpoint.Authorization.Parameters)["apitoken"]
 		}
 		d.Set("authentication_token", []interface{}{auth})
-	} else if strings.EqualFold(*serviceEndpoint.Authorization.Scheme, "Key") {
+	} else if strings.EqualFold(*serviceEndpoint.Authorization.Scheme, "None") {
 		auth := make(map[string]interface{})
 		if x, ok := d.GetOk("authentication_none"); ok {
 			authList := x.([]interface{})[0].(map[string]interface{})
