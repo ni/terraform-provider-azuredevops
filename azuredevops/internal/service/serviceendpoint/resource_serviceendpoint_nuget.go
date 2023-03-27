@@ -155,8 +155,7 @@ func flattenServiceEndpointNuget(d *schema.ResourceData, serviceEndpoint *servic
 				newHash, hashKey := tfhelper.HelpFlattenSecretNested(d, "authentication_token", authList, "token")
 				auth[hashKey] = newHash
 			}
-		}
-		if serviceEndpoint.Authorization != nil && serviceEndpoint.Authorization.Parameters != nil {
+		} else if serviceEndpoint.Authorization != nil && serviceEndpoint.Authorization.Parameters != nil {
 			auth["token"] = (*serviceEndpoint.Authorization.Parameters)["apitoken"]
 		}
 		d.Set("authentication_token", []interface{}{auth})
@@ -168,8 +167,7 @@ func flattenServiceEndpointNuget(d *schema.ResourceData, serviceEndpoint *servic
 				newHash, hashKey := tfhelper.HelpFlattenSecretNested(d, "authentication_none", authList, "key")
 				auth[hashKey] = newHash
 			}
-		}
-		if serviceEndpoint.Authorization != nil && serviceEndpoint.Authorization.Parameters != nil {
+		} else if serviceEndpoint.Authorization != nil && serviceEndpoint.Authorization.Parameters != nil {
 			auth["key"] = (*serviceEndpoint.Authorization.Parameters)["nugetkey"]
 		}
 		d.Set("authentication_none", []interface{}{auth})
@@ -183,14 +181,13 @@ func flattenServiceEndpointNuget(d *schema.ResourceData, serviceEndpoint *servic
 				newHash, hashKey = tfhelper.HelpFlattenSecretNested(d, "authentication_basic", oldAuthList, "username")
 				auth[hashKey] = newHash
 			}
-		}
-		if serviceEndpoint.Authorization != nil && serviceEndpoint.Authorization.Parameters != nil {
+		} else if serviceEndpoint.Authorization != nil && serviceEndpoint.Authorization.Parameters != nil {
 			auth["password"] = (*serviceEndpoint.Authorization.Parameters)["password"]
 			auth["username"] = (*serviceEndpoint.Authorization.Parameters)["username"]
 		}
 		d.Set("authentication_basic", []interface{}{auth})
 	} else {
-		panic(fmt.Errorf("inconsistent authorization scheme. Expected: (Token, UsernamePassword)  , but got %s", *serviceEndpoint.Authorization.Scheme))
+		panic(fmt.Errorf("inconsistent authorization scheme. Expected: (Token, None, UsernamePassword)  , but got %s", *serviceEndpoint.Authorization.Scheme))
 	}
 
 	d.Set("url", *serviceEndpoint.Url)
