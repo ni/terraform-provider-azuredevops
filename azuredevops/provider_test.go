@@ -2,6 +2,7 @@ package azuredevops
 
 import (
 	"os"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -52,7 +53,6 @@ func TestProvider_HasChildResources(t *testing.T) {
 		"azuredevops_serviceendpoint_jfrog_xray_v2",
 		"azuredevops_serviceendpoint_externaltfs",
 		"azuredevops_variable_group",
-		"azuredevops_variable_group_permissions",
 		"azuredevops_repository_policy_author_email_pattern",
 		"azuredevops_repository_policy_case_enforcement",
 		"azuredevops_repository_policy_file_path_pattern",
@@ -86,12 +86,19 @@ func TestProvider_HasChildResources(t *testing.T) {
 		"azuredevops_workitem",
 	}
 
-	resources := Provider().ResourcesMap
-	require.Equal(t, len(expectedResources), len(resources), "There are an unexpected number of registered resources")
+	resources := make([]string, 0, len(Provider().ResourcesMap))
+	for k := range Provider().ResourcesMap {
+		resources = append(resources, k)
+	}
+
+	sort.Strings(expectedResources)
+	sort.Strings(resources)
+
+	require.Equal(t, expectedResources, resources, "There are an unexpected number of registered resources")
 
 	for _, resource := range expectedResources {
 		require.Contains(t, resources, resource, "An expected resource was not registered")
-		require.NotNil(t, resources[resource], "A resource cannot have a nil schema")
+		require.NotNil(t, Provider().ResourcesMap[resource], "A resource cannot have a nil schema")
 	}
 }
 
@@ -118,12 +125,19 @@ func TestProvider_HasChildDataSources(t *testing.T) {
 		"azuredevops_serviceendpoint_github",
 	}
 
-	dataSources := Provider().DataSourcesMap
-	require.Equal(t, len(expectedDataSources), len(dataSources), "There are an unexpected number of registered data sources")
+	dataSources := make([]string, 0, len(Provider().DataSourcesMap))
+	for k := range Provider().DataSourcesMap {
+		dataSources = append(dataSources, k)
+	}
+
+	sort.Strings(dataSources)
+	sort.Strings(expectedDataSources)
+
+	require.Equal(t, expectedDataSources, dataSources, "There are an unexpected number of registered resources")
 
 	for _, resource := range expectedDataSources {
 		require.Contains(t, dataSources, resource, "An expected data source was not registered")
-		require.NotNil(t, dataSources[resource], "A data source cannot have a nil schema")
+		require.NotNil(t, Provider().DataSourcesMap[resource], "A data source cannot have a nil schema")
 	}
 }
 
