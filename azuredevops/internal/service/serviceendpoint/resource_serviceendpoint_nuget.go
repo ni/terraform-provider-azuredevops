@@ -52,7 +52,6 @@ func ResourceServiceEndpointNuget() *schema.Resource {
 		},
 	}
 
-	keyHashKey, keyHashSchema := tfhelper.GenerateSecreteMemoSchema("key")
 	ak := &schema.Resource{
 		Schema: map[string]*schema.Schema{
 			"key": {
