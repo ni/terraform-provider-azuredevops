@@ -26,8 +26,8 @@ var nugetTestServiceEndpointProjectIDpassword = &nugetRandomServiceEndpointProje
 var nugetTestServiceEndpointPassword = serviceendpoint.ServiceEndpoint{
 	Authorization: &serviceendpoint.EndpointAuthorization{
 		Parameters: &map[string]string{
-			"username": "NUGET_TEST_username",
-			"password": "NUGET_TEST_password",
+			"username": "",
+			"password": "",
 		},
 		Scheme: converter.String("UsernamePassword"),
 	},
@@ -54,7 +54,7 @@ var nugetTestServiceEndpointProjectID = &nugetRandomServiceEndpointProjectID
 var nugetTestServiceEndpointToken = serviceendpoint.ServiceEndpoint{
 	Authorization: &serviceendpoint.EndpointAuthorization{
 		Parameters: &map[string]string{
-			"apitoken": "NUGET_TEST_token",
+			"apitoken": "",
 		},
 		Scheme: converter.String("Token"),
 	},
@@ -77,7 +77,7 @@ var nugetTestServiceEndpointToken = serviceendpoint.ServiceEndpoint{
 var nugetTestServiceEndpointKey = serviceendpoint.ServiceEndpoint{
 	Authorization: &serviceendpoint.EndpointAuthorization{
 		Parameters: &map[string]string{
-			"nugetkey": "NUGET_TEST_key",
+			"nugetkey": "",
 		},
 		Scheme: converter.String("None"),
 	},

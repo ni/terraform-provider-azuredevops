@@ -5,6 +5,7 @@
 package serviceendpoint
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -42,11 +43,10 @@ func ResourceServiceEndpointNuget() *schema.Resource {
 	at := &schema.Resource{
 		Schema: map[string]*schema.Schema{
 			"token": {
-				Description:      "The Nuget Feed access token.",
-				Type:             schema.TypeString,
-				Required:         true,
-				Sensitive:        true,
-				DiffSuppressFunc: tfhelper.DiffFuncSuppressSecretChanged,
+				Description: "The Nuget Feed access token.",
+				Type:        schema.TypeString,
+				Required:    true,
+				Sensitive:   true,
 			},
 			patHashKey: patHashSchema,
 		},
@@ -55,10 +55,10 @@ func ResourceServiceEndpointNuget() *schema.Resource {
 	ak := &schema.Resource{
 		Schema: map[string]*schema.Schema{
 			"key": {
-				Description:      "The Nuget Feed API key.",
-				Type:             schema.TypeString,
-				Required:         true,
-				Sensitive:        true,
+				Description: "The Nuget Feed API key.",
+				Type:        schema.TypeString,
+				Required:    true,
+				Sensitive:   true,
 			},
 		},
 	}
@@ -66,21 +66,17 @@ func ResourceServiceEndpointNuget() *schema.Resource {
 	aup := &schema.Resource{
 		Schema: map[string]*schema.Schema{
 			"username": {
-				Description:      "The Nuget feed user name.",
-				Type:             schema.TypeString,
-				Required:         true,
-				Sensitive:        true,
-				DiffSuppressFunc: tfhelper.DiffFuncSuppressSecretChanged,
+				Description: "The Nuget feed user name.",
+				Type:        schema.TypeString,
+				Required:    true,
+				Sensitive:   true,
 			},
-			patHashKeyU: patHashSchemaU,
 			"password": {
-				Description:      "The Nuget feed password.",
-				Type:             schema.TypeString,
-				Required:         true,
-				Sensitive:        true,
-				DiffSuppressFunc: tfhelper.DiffFuncSuppressSecretChanged,
+				Description: "The Nuget feed password.",
+				Type:        schema.TypeString,
+				Required:    true,
+				Sensitive:   true,
 			},
-			patHashKeyP: patHashSchemaP,
 		},
 	}
 
@@ -158,45 +154,25 @@ func expandServiceEndpointNuget(d *schema.ResourceData) (*serviceendpoint.Servic
 // Convert AzDO data structure to internal Terraform data structure
 func flattenServiceEndpointNuget(d *schema.ResourceData, serviceEndpoint *serviceendpoint.ServiceEndpoint, projectID *uuid.UUID) {
 	doBaseFlattening(d, serviceEndpoint, projectID)
-	if strings.EqualFold(*serviceEndpoint.Authorization.Scheme, "Token") {
-		auth := make(map[string]interface{})
-		if x, ok := d.GetOk("authentication_token"); ok {
-			authList := x.([]interface{})[0].(map[string]interface{})
-			if len(authList) > 0 {
-				newHash, hashKey := tfhelper.HelpFlattenSecretNested(d, "authentication_token", authList, "token")
-				auth[hashKey] = newHash
-			}
-		} else if serviceEndpoint.Authorization != nil && serviceEndpoint.Authorization.Parameters != nil {
-			auth["token"] = (*serviceEndpoint.Authorization.Parameters)["apitoken"]
+	if strings.EqualFold(*serviceEndpoint.Authorization.Scheme, "UsernamePassword") {
+		if _, ok := d.GetOk("authentication_basic"); !ok {
+			auth := make(map[string]interface{})
+			auth["username"] = ""
+			auth["password"] = ""
+			d.Set("authentication_basic", []interface{}{auth})
 		}
-		d.Set("authentication_token", []interface{}{auth})
+	} else if strings.EqualFold(*serviceEndpoint.Authorization.Scheme, "Token") {
+		if _, ok := d.GetOk("authentication_token"); !ok {
+			auth := make(map[string]interface{})
+			auth["token"] = ""
+			d.Set("authentication_token", []interface{}{auth})
+		}
 	} else if strings.EqualFold(*serviceEndpoint.Authorization.Scheme, "None") {
-		auth := make(map[string]interface{})
-		if x, ok := d.GetOk("authentication_none"); ok {
-			authList := x.([]interface{})[0].(map[string]interface{})
-			if len(authList) > 0 {
-				newHash, hashKey := tfhelper.HelpFlattenSecretNested(d, "authentication_none", authList, "key")
-				auth[hashKey] = newHash
-			}
-		} else if serviceEndpoint.Authorization != nil && serviceEndpoint.Authorization.Parameters != nil {
-			auth["key"] = (*serviceEndpoint.Authorization.Parameters)["nugetkey"]
+		if _, ok := d.GetOk("authentication_none"); !ok {
+			auth := make(map[string]interface{})
+			auth["key"] = ""
+			d.Set("authentication_none", []interface{}{auth})
 		}
-		d.Set("authentication_none", []interface{}{auth})
-	} else if strings.EqualFold(*serviceEndpoint.Authorization.Scheme, "UsernamePassword") {
-		auth := make(map[string]interface{})
-		if old, ok := d.GetOk("authentication_basic"); ok {
-			oldAuthList := old.([]interface{})[0].(map[string]interface{})
-			if len(oldAuthList) > 0 {
-				newHash, hashKey := tfhelper.HelpFlattenSecretNested(d, "authentication_basic", oldAuthList, "password")
-				auth[hashKey] = newHash
-				newHash, hashKey = tfhelper.HelpFlattenSecretNested(d, "authentication_basic", oldAuthList, "username")
-				auth[hashKey] = newHash
-			}
-		} else if serviceEndpoint.Authorization != nil && serviceEndpoint.Authorization.Parameters != nil {
-			auth["password"] = (*serviceEndpoint.Authorization.Parameters)["password"]
-			auth["username"] = (*serviceEndpoint.Authorization.Parameters)["username"]
-		}
-		d.Set("authentication_basic", []interface{}{auth})
 	} else {
 		panic(fmt.Errorf("inconsistent authorization scheme. Expected: (Token, None, UsernamePassword)  , but got %s", *serviceEndpoint.Authorization.Scheme))
 	}
