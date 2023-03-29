@@ -142,7 +142,10 @@ func expandServiceEndpointNuget(d *schema.ResourceData) (*serviceendpoint.Servic
 		if !ok {
 			return nil, nil, errors.New("Unable to read 'username'")
 		}
-		authParams["password"] = expandSecret(msi, "password")
+		authParams["password"], ok = msi["password"].(string)
+		if !ok {
+			return nil, nil, errors.New("Unable to read 'password'")
+		}
 	}
 	serviceEndpoint.Authorization = &serviceendpoint.EndpointAuthorization{
 		Parameters: &authParams,
