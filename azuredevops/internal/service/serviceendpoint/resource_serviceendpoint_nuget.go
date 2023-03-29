@@ -128,7 +128,10 @@ func expandServiceEndpointNuget(d *schema.ResourceData) (*serviceendpoint.Servic
 	} else if x, ok := d.GetOk("authentication_none"); ok {
 		authScheme = "None"
 		msi := x.([]interface{})[0].(map[string]interface{})
-		authParams["nugetkey"] = expandSecret(msi, "key")
+		authParams["nugetkey"], ok = msi["key"].(string)
+		if !ok {
+			return nil, nil, errors.New("Unable to read 'key'")
+		}
 	} else if x, ok := d.GetOk("authentication_basic"); ok {
 		authScheme = "UsernamePassword"
 		msi := x.([]interface{})[0].(map[string]interface{})
