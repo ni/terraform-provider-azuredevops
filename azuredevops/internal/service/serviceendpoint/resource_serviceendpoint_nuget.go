@@ -66,8 +66,6 @@ func ResourceServiceEndpointNuget() *schema.Resource {
 		},
 	}
 
-	patHashKeyU, patHashSchemaU := tfhelper.GenerateSecreteMemoSchema("username")
-	patHashKeyP, patHashSchemaP := tfhelper.GenerateSecreteMemoSchema("password")
 	aup := &schema.Resource{
 		Schema: map[string]*schema.Schema{
 			"username": {
