@@ -1,7 +1,3 @@
-//go:build (all || resource_serviceendpoint_nuget) && !exclude_serviceendpoints
-// +build all resource_serviceendpoint_nuget
-// +build !exclude_serviceendpoints
-
 package serviceendpoint
 
 import (
@@ -157,7 +153,7 @@ func flattenServiceEndpointNuget(d *schema.ResourceData, serviceEndpoint *servic
 	if strings.EqualFold(*serviceEndpoint.Authorization.Scheme, "UsernamePassword") {
 		if _, ok := d.GetOk("authentication_basic"); !ok {
 			auth := make(map[string]interface{})
-			auth["username"] = ""
+			auth["username"] = (*serviceEndpoint.Authorization.Parameters)["username"]
 			auth["password"] = ""
 			d.Set("authentication_basic", []interface{}{auth})
 		}
