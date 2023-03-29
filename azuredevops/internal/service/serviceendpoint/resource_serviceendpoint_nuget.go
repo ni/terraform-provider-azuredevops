@@ -62,7 +62,6 @@ func ResourceServiceEndpointNuget() *schema.Resource {
 				Sensitive:        true,
 				DiffSuppressFunc: tfhelper.DiffFuncSuppressSecretChanged,
 			},
-			keyHashKey: keyHashSchema,
 		},
 	}
 
