@@ -2,6 +2,11 @@ package azuredevops
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"net/url"
+	"os"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
@@ -19,7 +24,15 @@ import (
 	"github.com/microsoft/terraform-provider-azuredevops/azuredevops/internal/service/serviceendpoint"
 	"github.com/microsoft/terraform-provider-azuredevops/azuredevops/internal/service/taskagent"
 	"github.com/microsoft/terraform-provider-azuredevops/azuredevops/internal/service/workitemtracking"
+	"github.com/microsoft/terraform-provider-azuredevops/vendor/github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
 )
+
+type TokenResponse struct {
+	TokenType      string  `json:"token_type,omitempty"`
+	ExpiresIn      float32 `json:"expires_in,omitempty"`
+	ExtraExpiresIn float32 `json:"ext_expires_in,omitempty"`
+	AccessToken    string  `json:"access_token,omitempty"`
+}
 
 // Provider - The top level Azure DevOps Provider definition.
 func Provider() *schema.Provider {
@@ -136,6 +149,26 @@ func Provider() *schema.Provider {
 				Description: "The personal access token which should be used.",
 				Sensitive:   true,
 			},
+			"sp_client_id": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				DefaultFunc:  schema.EnvDefaultFunc("AZDO_SP_CLIENT_ID", nil),
+				Description:  "The service principal client id which should be used.",
+				ValidateFunc: validation.IsUUID,
+			},
+			"sp_tenant_id": {
+				Type:         schema.TypeString,
+				Optional:     true,
+				DefaultFunc:  schema.EnvDefaultFunc("AZDO_SP_TENANT_ID", nil),
+				Description:  "The service principal tenant id which should be used.",
+				ValidateFunc: validation.IsUUID,
+			},
+			"use_oidc": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("AZDO_USE_OIDC", false),
+				Description: "Use OIDC to connect to authenticate as a service principal.",
+			},
 		},
 	}
 
@@ -153,8 +186,49 @@ func providerConfigure(p *schema.Provider) schema.ConfigureContextFunc {
 			terraformVersion = "0.11+compatible"
 		}
 
-		client, err := client.GetAzdoClient(d.Get("personal_access_token").(string), d.Get("org_service_url").(string), terraformVersion)
+		var err error = nil
+		var azdo_client interface{} = nil
 
-		return client, diag.FromErr(err)
+		if d.Get("use_oidc").(bool) {
+			client_id := d.Get("sp_client_id").(string)
+			tenant_id := d.Get("sp_tenant_id").(string)
+			oidc_token := os.Getenv("TFC_WORKLOAD_IDENTITY_TOKEN")
+			token_url := fmt.Sprintf("https://login.microsoftonline.com/%s/oauth2/v2.0/token", tenant_id)
+
+			form_values := url.Values{
+				"client_assertion":      {oidc_token},
+				"client_assertion_type": {"urn:ietf:params:oauth:client-assertion-type:jwt-bearer"},
+				"client_id":             {client_id},
+				"grant_type":            {"client_credentials"},
+				"scope":                 {"499b84ac-1321-427f-aa17-267ca6975798/.default"},
+			}
+			response, err := http.PostForm(token_url, form_values)
+
+			if err != nil {
+				return nil, diag.FromErr(err)
+			}
+
+			if response.StatusCode != http.StatusOK {
+				return nil, diag.FromErr(err)
+			}
+
+			defer response.Body.Close()
+
+			response_interface := TokenResponse{}
+
+			err = json.NewDecoder(response.Body).Decode(&response_interface)
+			if err != nil {
+				return nil, diag.FromErr(err)
+			}
+
+			// TODO: Validate response fields
+
+			token := response_interface.AccessToken
+			azdo_client, err = client.GetAzdoClient(token, d.Get("org_service_url").(string), terraformVersion)
+		} else {
+			azdo_client, err = client.GetAzdoClient(d.Get("personal_access_token").(string), d.Get("org_service_url").(string), terraformVersion)
+		}
+
+		return azdo_client, diag.FromErr(err)
 	}
 }
