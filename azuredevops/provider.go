@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -192,6 +193,13 @@ func Provider() *schema.Provider {
 				Description: "Use the GitHub Actions OIDC token to authenticate to a service principal.",
 				//ExactlyOneOf: allAuthFields,
 			},
+			"sp_oidc_github_actions_audience": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("AZDO_SP_OIDC_GITHUB_ACTIONS_AUDIENCE", nil),
+				Description: "Set the audience for the github actions ODIC token.",
+				//ExactlyOneOf: allAuthFields,
+			},
 			"sp_oidc_hcp": {
 				Type:        schema.TypeBool,
 				Optional:    true,
@@ -245,12 +253,25 @@ func Provider() *schema.Provider {
 	return p
 }
 
-func getGitHubOIDCToken() (string, error) {
+func getGitHubOIDCToken(d *schema.ResourceData) (string, error) {
 	requestUrl := os.Getenv("ACTIONS_ID_TOKEN_REQUEST_URL")
 	requestToken := os.Getenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
 	client := &http.Client{}
+	audience := "api://AzureADTokenExchange"
 
-	req, err := http.NewRequest("POST", requestUrl, nil)
+	if userAudience, ok := d.GetOk("sp_oidc_github_actions_audience"); ok {
+		audience = userAudience.(string)
+	}
+
+	parsedUrl, err := url.Parse(requestUrl)
+	if err != nil {
+		return "", err
+	}
+	query := parsedUrl.Query()
+	query.Add("audience", audience)
+	parsedUrl.RawQuery = query.Encode()
+
+	req, err := http.NewRequest("POST", parsedUrl.String(), nil)
 	if err != nil {
 		return "", err
 	}
@@ -258,9 +279,6 @@ func getGitHubOIDCToken() (string, error) {
 	req.Header.Add("Authorization", "Bearer "+requestToken)
 	req.Header.Add("Accept", "application/json")
 	req.Header.Add("api-version", "2.0")
-	q := req.URL.Query()
-	q.Add("audience", "api://AzureADTokenExchange")
-	req.URL.RawQuery = q.Encode()
 
 	response, err := client.Do(req)
 	if err != nil {
@@ -321,7 +339,7 @@ func getAuthToken(ctx context.Context, d *schema.ResourceData) (string, error) {
 	}
 
 	if sp_oidc_github_actions, ok := d.GetOk("sp_oidc_github_actions"); ok && sp_oidc_github_actions.(bool) {
-		gitHubToken, err := getGitHubOIDCToken()
+		gitHubToken, err := getGitHubOIDCToken(d)
 		if err != nil {
 			return "", err
 		}

@@ -145,6 +145,7 @@ func TestProvider_SchemaIsValid(t *testing.T) {
 		{"sp_oidc_token", false, "AZDO_SP_OIDC_TOKEN", true},
 		{"sp_oidc_token_path", false, "AZDO_SP_OIDC_TOKEN_PATH", false},
 		{"sp_oidc_github_actions", false, "AZDO_SP_OIDC_GITHUB_ACTIONS", false},
+		{"sp_oidc_github_actions_audience", false, "AZDO_SP_OIDC_GITHUB_ACTIONS_AUDIENCE", false},
 		{"sp_oidc_hcp", false, "AZDO_SP_OIDC_HCP", false},
 		{"sp_client_certificate_path", false, "AZDO_SP_CLIENT_CERTIFICATE_PATH", false},
 		{"sp_client_certificate", false, "AZDO_SP_CLIENT_CERTIFICATE", true},
