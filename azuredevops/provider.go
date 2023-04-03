@@ -1,6 +1,7 @@
 package azuredevops
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -271,14 +272,13 @@ func getGitHubOIDCToken(d *schema.ResourceData) (string, error) {
 	query.Add("audience", audience)
 	parsedUrl.RawQuery = query.Encode()
 
-	req, err := http.NewRequest("POST", parsedUrl.String(), nil)
+	req, err := http.NewRequest("POST", parsedUrl.String(), bytes.NewBuffer(nil))
 	if err != nil {
 		return "", err
 	}
 
 	req.Header.Add("Authorization", "Bearer "+requestToken)
 	req.Header.Add("Accept", "application/json")
-	req.Header.Add("api-version", "2.0")
 
 	response, err := client.Do(req)
 	if err != nil {
