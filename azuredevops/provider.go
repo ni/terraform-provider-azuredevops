@@ -2,12 +2,17 @@ package azuredevops
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
-	"fmt"
+	"errors"
+	"io/ioutil"
 	"net/http"
-	"net/url"
 	"os"
+	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
@@ -28,14 +33,13 @@ import (
 )
 
 type TokenResponse struct {
-	TokenType      string  `json:"token_type,omitempty"`
-	ExpiresIn      float32 `json:"expires_in,omitempty"`
-	ExtraExpiresIn float32 `json:"ext_expires_in,omitempty"`
-	AccessToken    string  `json:"access_token,omitempty"`
+	Value string `json:"value,omitempty"`
 }
 
 // Provider - The top level Azure DevOps Provider definition.
 func Provider() *schema.Provider {
+	// servicePrincipalAuthFields := []string{"sp_oidc_token", "sp_oidc_token_path", "sp_oidc_github_actions", "sp_oidc_hcp", "sp_client_certificate_path", "sp_client_certificate", "sp_client_secret", "sp_client_secret_path"}
+	//allAuthFields := append([]string{"personal_access_token"}, servicePrincipalAuthFields...)
 	p := &schema.Provider{
 		ResourcesMap: map[string]*schema.Resource{
 			"azuredevops_resource_authorization":                 build.ResourceResourceAuthorization(),
@@ -148,6 +152,7 @@ func Provider() *schema.Provider {
 				DefaultFunc: schema.EnvDefaultFunc("AZDO_PERSONAL_ACCESS_TOKEN", nil),
 				Description: "The personal access token which should be used.",
 				Sensitive:   true,
+				//ExactlyOneOf: allAuthFields,
 			},
 			"sp_client_id": {
 				Type:         schema.TypeString,
@@ -155,6 +160,7 @@ func Provider() *schema.Provider {
 				DefaultFunc:  schema.EnvDefaultFunc("AZDO_SP_CLIENT_ID", nil),
 				Description:  "The service principal client id which should be used.",
 				ValidateFunc: validation.IsUUID,
+				// RequiredWith: servicePrincipalAuthFields,
 			},
 			"sp_tenant_id": {
 				Type:         schema.TypeString,
@@ -162,12 +168,74 @@ func Provider() *schema.Provider {
 				DefaultFunc:  schema.EnvDefaultFunc("AZDO_SP_TENANT_ID", nil),
 				Description:  "The service principal tenant id which should be used.",
 				ValidateFunc: validation.IsUUID,
+				// RequiredWith: servicePrincipalAuthFields,
 			},
-			"use_oidc": {
+			"sp_oidc_token": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Sensitive:   true,
+				DefaultFunc: schema.EnvDefaultFunc("AZDO_SP_OIDC_TOKEN", nil),
+				Description: "OIDC token to authenticate as a service principal.",
+				//ExactlyOneOf: allAuthFields,
+			},
+			"sp_oidc_token_path": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("AZDO_SP_OIDC_TOKEN_PATH", nil),
+				Description: "OIDC token from file to authenticate as a service principal.",
+				//ExactlyOneOf: allAuthFields,
+			},
+			"sp_oidc_github_actions": {
 				Type:        schema.TypeBool,
 				Optional:    true,
-				DefaultFunc: schema.EnvDefaultFunc("AZDO_USE_OIDC", false),
-				Description: "Use OIDC to connect to authenticate as a service principal.",
+				DefaultFunc: schema.EnvDefaultFunc("AZDO_SP_OIDC_GITHUB_ACTIONS", nil),
+				Description: "Use the GitHub Actions OIDC token to authenticate to a service principal.",
+				//ExactlyOneOf: allAuthFields,
+			},
+			"sp_oidc_hcp": {
+				Type:        schema.TypeBool,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("AZDO_SP_OIDC_HCP", nil),
+				Description: "Use dynamic provider credentials in HCP to authenticate as a service principal.",
+				//ExactlyOneOf: allAuthFields,
+			},
+			"sp_client_certificate_path": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("AZDO_SP_CLIENT_CERTIFICATE_PATH", nil),
+				Description: "Path to a certificate to use to authenticate to the service principal.",
+				//ExactlyOneOf: allAuthFields,
+			},
+			"sp_client_certificate": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Sensitive:   true,
+				DefaultFunc: schema.EnvDefaultFunc("AZDO_SP_CLIENT_CERTIFICATE", nil),
+				Description: "Base64 encoded certificate to use to authenticate to the service principal.",
+				//ExactlyOneOf: allAuthFields,
+			},
+			"sp_client_certificate_password": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Sensitive:   true,
+				DefaultFunc: schema.EnvDefaultFunc("AZDO_SP_CLIENT_CERTIFICATE_PASSWORD", nil),
+				Description: "Password for a client certificate password.",
+				// RequiredWith: []string{"sp_client_certificate_path", "sp_client_certificate"},
+			},
+			"sp_client_secret": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				Sensitive:   true,
+				DefaultFunc: schema.EnvDefaultFunc("AZDO_SP_CLIENT_SECRET", nil),
+				Description: "TODO",
+				//ExactlyOneOf: allAuthFields,
+			},
+			"sp_client_secret_path": {
+				Type:        schema.TypeString,
+				Optional:    true,
+				DefaultFunc: schema.EnvDefaultFunc("AZDO_SP_CLIENT_SECRET_PATH", nil),
+				Description: "TODO",
+				//ExactlyOneOf: allAuthFields,
 			},
 		},
 	}
@@ -175,6 +243,196 @@ func Provider() *schema.Provider {
 	p.ConfigureContextFunc = providerConfigure(p)
 
 	return p
+}
+
+func getGitHubOIDCToken() (string, error) {
+	requestUrl := os.Getenv("ACTIONS_ID_TOKEN_REQUEST_URL")
+	requestToken := os.Getenv("ACTIONS_ID_TOKEN_REQUEST_TOKEN")
+	client := &http.Client{}
+
+	req, err := http.NewRequest("POST", requestUrl, nil)
+	if err != nil {
+		return "", err
+	}
+
+	req.Header.Add("Authorization", "Bearer "+requestToken)
+	req.Header.Add("Accept", "application/json")
+	req.Header.Add("api-version", "2.0")
+	q := req.URL.Query()
+	q.Add("audience", "api://AzureADTokenExchange")
+	req.URL.RawQuery = q.Encode()
+
+	response, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+
+	defer response.Body.Close()
+	response_interface := TokenResponse{}
+	err = json.NewDecoder(response.Body).Decode(&response_interface)
+	if err != nil {
+		return "", err
+	}
+
+	return response_interface.Value, nil
+}
+
+func getAuthToken(ctx context.Context, d *schema.ResourceData) (string, error) {
+	if personal_access_token, ok := d.GetOk("personal_access_token"); ok {
+		tflog.Info(ctx, "Using personal access token for authentication")
+		return personal_access_token.(string), nil
+	}
+
+	tenantId := d.Get("sp_tenant_id").(string)
+	clientId := d.Get("sp_client_id").(string)
+	AzureDevOpsAppDefaultScope := "499b84ac-1321-427f-aa17-267ca6975798/.default"
+	opts := policy.TokenRequestOptions{
+		Scopes: []string{AzureDevOpsAppDefaultScope},
+	}
+
+	if sp_oidc_token, ok := d.GetOk("sp_oidc_token"); ok {
+		cred, err := azidentity.NewClientAssertionCredential(tenantId, clientId, func(context.Context) (string, error) { return sp_oidc_token.(string), nil }, nil)
+		if err != nil {
+			return "", err
+		}
+		token, err := cred.GetToken(context.Background(), opts)
+		if err != nil {
+			return "", err
+		}
+
+		return token.Token, nil
+	}
+
+	if sp_oidc_token_path, ok := d.GetOk("sp_oidc_token_path"); ok {
+		fileBytes, err := ioutil.ReadFile(sp_oidc_token_path.(string))
+		if err != nil {
+			return "", err
+		}
+		cred, err := azidentity.NewClientAssertionCredential(tenantId, clientId, func(context.Context) (string, error) { return strings.TrimSpace(string(fileBytes)), nil }, nil)
+		if err != nil {
+			return "", err
+		}
+		token, err := cred.GetToken(context.Background(), opts)
+		if err != nil {
+			return "", err
+		}
+
+		return token.Token, nil
+	}
+
+	if sp_oidc_github_actions, ok := d.GetOk("sp_oidc_github_actions"); ok && sp_oidc_github_actions.(bool) {
+		gitHubToken, err := getGitHubOIDCToken()
+		if err != nil {
+			return "", err
+		}
+		cred, err := azidentity.NewClientAssertionCredential(tenantId, clientId, func(context.Context) (string, error) { return gitHubToken, nil }, nil)
+		if err != nil {
+			return "", err
+		}
+		token, err := cred.GetToken(context.Background(), opts)
+		if err != nil {
+			return "", err
+		}
+		return token.Token, nil
+	}
+
+	if sp_oidc_hcp, ok := d.GetOk("sp_oidc_hcp"); ok && sp_oidc_hcp.(bool) {
+		cred, err := azidentity.NewClientAssertionCredential(tenantId, clientId, func(context.Context) (string, error) { return os.Getenv("TFC_WORKLOAD_IDENTITY_TOKEN"), nil }, nil)
+		if err != nil {
+			return "", err
+		}
+		token, err := cred.GetToken(context.Background(), opts)
+		if err != nil {
+			return "", err
+		}
+		return token.Token, nil
+	}
+
+	if sp_client_certificate_path, ok := d.GetOk("sp_client_certificate_path"); ok {
+		fileBytes, err := ioutil.ReadFile(sp_client_certificate_path.(string))
+		if err != nil {
+			return "", err
+		}
+
+		certPassword := ([]byte)(nil)
+		if password, ok := d.GetOk("sp_client_certificate_password"); ok {
+			certPassword = []byte(password.(string))
+		}
+
+		certs, key, err := azidentity.ParseCertificates(fileBytes, certPassword)
+		if err != nil {
+			return "", err
+		}
+
+		cred, err := azidentity.NewClientCertificateCredential(tenantId, clientId, certs, key, nil)
+
+		if err != nil {
+			return "", err
+		}
+		token, err := cred.GetToken(context.Background(), opts)
+		if err != nil {
+			return "", err
+		}
+
+		return token.Token, nil
+	}
+
+	if sp_client_certificate, ok := d.GetOk("sp_client_certificate"); ok {
+		cert_bytes, err := base64.StdEncoding.DecodeString(sp_client_certificate.(string))
+		if err != nil {
+			return "", err
+		}
+		certPassword := ([]byte)(nil)
+		if password, ok := d.GetOk("sp_client_certificate_password"); ok {
+			certPassword = []byte(password.(string))
+		}
+		certs, key, err := azidentity.ParseCertificates(cert_bytes, certPassword)
+		if err != nil {
+			return "", err
+		}
+		cred, err := azidentity.NewClientCertificateCredential(tenantId, clientId, certs, key, nil)
+
+		if err != nil {
+			return "", err
+		}
+		token, err := cred.GetToken(context.Background(), opts)
+		if err != nil {
+			return "", err
+		}
+
+		return token.Token, nil
+	}
+
+	if sp_client_secret, ok := d.GetOk("sp_client_secret"); ok {
+		cred, err := azidentity.NewClientSecretCredential(tenantId, clientId, sp_client_secret.(string), nil)
+		if err != nil {
+			return "", err
+		}
+		token, err := cred.GetToken(context.Background(), opts)
+		if err != nil {
+			return "", err
+		}
+		return token.Token, nil
+	}
+
+	if sp_client_secret_path, ok := d.GetOk("sp_client_secret_path"); ok {
+
+		fileBytes, err := ioutil.ReadFile(sp_client_secret_path.(string))
+		if err != nil {
+			return "", err
+		}
+		cred, err := azidentity.NewClientSecretCredential(tenantId, clientId, strings.TrimSpace(string(fileBytes)), nil)
+		if err != nil {
+			return "", err
+		}
+		token, err := cred.GetToken(context.Background(), opts)
+		if err != nil {
+			return "", err
+		}
+		return token.Token, nil
+	}
+
+	return "", errors.New("No authentication method found.")
 }
 
 func providerConfigure(p *schema.Provider) schema.ConfigureContextFunc {
@@ -186,48 +444,12 @@ func providerConfigure(p *schema.Provider) schema.ConfigureContextFunc {
 			terraformVersion = "0.11+compatible"
 		}
 
-		var err error = nil
-		var azdo_client interface{} = nil
-
-		if d.Get("use_oidc").(bool) {
-			client_id := d.Get("sp_client_id").(string)
-			tenant_id := d.Get("sp_tenant_id").(string)
-			oidc_token := os.Getenv("TFC_WORKLOAD_IDENTITY_TOKEN")
-			token_url := fmt.Sprintf("https://login.microsoftonline.com/%s/oauth2/v2.0/token", tenant_id)
-
-			form_values := url.Values{
-				"client_assertion":      {oidc_token},
-				"client_assertion_type": {"urn:ietf:params:oauth:client-assertion-type:jwt-bearer"},
-				"client_id":             {client_id},
-				"grant_type":            {"client_credentials"},
-				"scope":                 {"499b84ac-1321-427f-aa17-267ca6975798/.default"},
-			}
-			response, err := http.PostForm(token_url, form_values)
-
-			if err != nil {
-				return nil, diag.FromErr(err)
-			}
-
-			if response.StatusCode != http.StatusOK {
-				return nil, diag.FromErr(err)
-			}
-
-			defer response.Body.Close()
-
-			response_interface := TokenResponse{}
-
-			err = json.NewDecoder(response.Body).Decode(&response_interface)
-			if err != nil {
-				return nil, diag.FromErr(err)
-			}
-
-			// TODO: Validate response fields
-
-			token := response_interface.AccessToken
-			azdo_client, err = client.GetAzdoClient(token, d.Get("org_service_url").(string), terraformVersion)
-		} else {
-			azdo_client, err = client.GetAzdoClient(d.Get("personal_access_token").(string), d.Get("org_service_url").(string), terraformVersion)
+		token, err := getAuthToken(ctx, d)
+		if err != nil {
+			return nil, diag.FromErr(err)
 		}
+
+		azdo_client, err := client.GetAzdoClient(token, d.Get("org_service_url").(string), terraformVersion)
 
 		return azdo_client, diag.FromErr(err)
 	}

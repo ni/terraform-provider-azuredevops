@@ -138,6 +138,17 @@ func TestProvider_SchemaIsValid(t *testing.T) {
 	tests := []testParams{
 		{"org_service_url", false, "AZDO_ORG_SERVICE_URL", false},
 		{"personal_access_token", false, "AZDO_PERSONAL_ACCESS_TOKEN", true},
+		{"sp_client_id", false, "AZDO_SP_CLIENT_ID", false},
+		{"sp_tenant_id", false, "AZDO_SP_TENANT_ID", false},
+		{"sp_client_secret", false, "AZDO_SP_CLIENT_SECRET", true},
+		{"sp_client_secret_path", false, "AZDO__SP_CLIENT_SECRET_PATH", false},
+		{"sp_oidc_token", false, "AZDO_SP_OIDC_TOKEN", true},
+		{"sp_oidc_token_path", false, "AZDO_SP_OIDC_TOKEN_PATH", false},
+		{"sp_oidc_github_actions", false, "AZDO_SP_OIDC_GITHUB_ACTIONS", false},
+		{"sp_oidc_hcp", false, "AZDO_SP_OIDC_HCP", false},
+		{"sp_client_certificate_path", false, "AZDO_SP_CLIENT_CERTIFICATE_PATH", false},
+		{"sp_client_certificate", false, "AZDO_SP_CLIENT_CERTIFICATE", true},
+		{"sp_client_certificate_password", false, "AZDO_SP_CLIENT_CERTIFICATE_PASSWORD", true},
 	}
 
 	schema := Provider().Schema
