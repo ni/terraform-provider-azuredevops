@@ -61,22 +61,22 @@ can also be sourced from the `AZDO_SP_CLIENT_ID` environment variable.
 - `sp_tenant_id` - The tenant id used when authenticating to a service principal.
 It can also be sourced from the `AZDO_SP_TENANT_ID` environment variable.
 
-`sp_client_id_plan` - The client id used when authenticating to a service principal using the Terraform
+- `sp_client_id_plan` - The client id used when authenticating to a service principal using the Terraform
 Cloud workload identity token during a plan operation in Terraform Cloud. `sp_client_id` may be used if
 the id is the same for plan & apply.
 It can also be sourced from the `AZDO_SP_CLIENT_ID_PLAN` environment variable.
 
-`sp_client_id_apply` - The client id used when authenticating to a service principal using the Terraform
+- `sp_client_id_apply` - The client id used when authenticating to a service principal using the Terraform
 Cloud workload identity token during an apply operation in Terraform Cloud. `sp_client_id` may be used if
 the id is the same for plan & apply.
 It can also be sourced from the `AZDO_SP_CLIENT_ID_APPLY` environment variable.
 
-`sp_tenant_id_plan` - The tenant id used when authenticating to a service principal using the Terraform
+- `sp_tenant_id_plan` - The tenant id used when authenticating to a service principal using the Terraform
 Cloud workload identity token during a plan operation in Terraform Cloud. `sp_tenant_id` may be used if
 the id is the same for plan & apply.
 It can also be sourced from the `AZDO_SP_TENANT_ID_PLAN` environment variable.
 
-`sp_tenant_id_apply` - The tenant id used when authenticating to a service principal using the Terraform
+- `sp_tenant_id_apply` - The tenant id used when authenticating to a service principal using the Terraform
 Cloud workload identity token during an apply operation in Terraform Cloud. `sp_tenant_id` may be used if
 the id is the same for plan & apply.
 It can also be sourced from the `AZDO_SP_TENANT_ID_APPLY` environment variable.
