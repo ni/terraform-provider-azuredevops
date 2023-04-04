@@ -410,7 +410,15 @@ func getAuthToken(ctx context.Context, d *schema.ResourceData) (string, error) {
 			tenantIdApply := d.Get("sp_tenant_id_apply").(string)
 
 			workloadIdentityTokenUnmarshalled := HCPWorkloadToken{}
-			err := json.Unmarshal([]byte(workloadIdentityToken), &workloadIdentityTokenUnmarshalled)
+			jwtParts := strings.Split(workloadIdentityToken, ".")
+			if len(jwtParts) != 3 {
+				return "", errors.New("Unable to split TFC_WORKLOAD_IDENTITY_TOKEN JWT")
+			}
+			tokenClaims, err := base64.StdEncoding.DecodeString(jwtParts[1])
+			if err != nil {
+				return "", err
+			}
+			err = json.Unmarshal(tokenClaims, &workloadIdentityTokenUnmarshalled)
 			if err != nil {
 				return "", err
 			}
