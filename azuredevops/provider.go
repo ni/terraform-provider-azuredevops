@@ -198,8 +198,7 @@ func Provider() *schema.Provider {
 				Optional:     true,
 				DefaultFunc:  schema.EnvDefaultFunc("AZDO_SP_OIDC_GITHUB_ACTIONS_AUDIENCE", nil),
 				Description:  "Set the audience for the github actions ODIC token.",
-				ExactlyOneOf: allAuthFields,
-				RequiredWith: []string{"sp_oidc_github_actions_audience", "sp_client_id", "sp_tenant_id"},
+				RequiredWith: []string{"sp_oidc_github_actions_audience", "sp_oidc_github_actions"},
 			},
 			"sp_oidc_hcp": {
 				Type:         schema.TypeBool,
