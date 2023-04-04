@@ -9,12 +9,12 @@ description: |-
 
 The Azure DevOps provider supports service principals through a variety of authentication methods, including client certificates.
 
+## Service Principal Configuration
+
 1. Create a Service Principal in [Azure portal](https://learn.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal) or
 using [Azure PowerShell](https://learn.microsoft.com/en-us/azure/active-directory/develop/howto-authenticate-service-principal-powershell) and generate a certificate for it. You do not need to assign the service principal any roles in Azure Ad.
 
 2. [Add the service principal to your Azure DevOps Organization.](https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/service-principal-managed-identity?view=azure-devops#2-add-and-manage-service-principal-in-an-azure-devops-organization)
-
-3. Configure the provider:
 
 ## Provider Configuration
 

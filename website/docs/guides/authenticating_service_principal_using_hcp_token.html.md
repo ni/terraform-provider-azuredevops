@@ -9,6 +9,8 @@ description: |-
 
 The Azure DevOps provider supports service principals through a variety of authentication methods, including the [OIDC identity token issued by Terraform Cloud](https://developer.hashicorp.com/terraform/cloud-docs/workspaces/dynamic-provider-credentials).
 
+## Service Principal Configuration
+
 1. Create a service principal in [Azure portal](https://learn.microsoft.com/en-us/azure/active-directory/develop/howto-create-service-principal-portal) or
 using [Azure PowerShell](https://learn.microsoft.com/en-us/azure/active-directory/develop/howto-authenticate-service-principal-powershell). Ignore steps about application roles and certificates.
 
@@ -17,8 +19,6 @@ using [Azure PowerShell](https://learn.microsoft.com/en-us/azure/active-director
 3. [Add the service principal to your Azure DevOps Organization.](https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/service-principal-managed-identity?view=azure-devops#2-add-and-manage-service-principal-in-an-azure-devops-organization)
 
 4. Set the `TFC_WORKLOAD_IDENTITY_AUDIENCE` environment variable to `api://AzureADTokenExchange` in the Terraform cloud workspace, or a custom audience which you configured in #2. **This is required even if you intend to use the standard value.**
-
-5. Configure the provider:
 
 ## Provider Configuration
 
