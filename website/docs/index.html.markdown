@@ -38,11 +38,11 @@ or by a [personal access token](https://learn.microsoft.com/en-us/azure/devops/o
 The OIDC service principal authentication methods allow for secure passwordless authentication from [Terraform Cloud](https://developer.hashicorp.com/terraform/cloud-docs/workspaces/dynamic-provider-credentials) & [GitHub Actions](https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/about-security-hardening-with-openid-connect).
 
 * [Authenticating to a Service Principal with a Terraform Cloud Workload Identity Token](guides/authenticating_service_principal_using_hcp_token.html)
-* [Authenticating to a Service Principal with a GitHub Actions OIDC Token](guides/authenticating_service_principal_using_a_client_certificate.html)
+* [Authenticating to a Service Principal with a GitHub Actions OIDC Token](guides/authenticating_service_principal_using_github_oidc.html)
 * [Authenticating to a Service Principal with a Client Certificate](guides/authenticating_service_principal_using_a_client_certificate.html)
 * [Authenticating to a Service Principal with a Client Secret](guides/authenticating_service_principal_using_a_client_secret.html)
 * [Authenticating to a Service Principal with an OIDC Token](guides/authenticating_service_principal_using_an_oidc_token.html)
-* [Authenticating using a Personal Access Token](guides/authenticating_service_principal_using_a_client_certificate.html)
+* [Authenticating using a Personal Access Token](guides/authenticating_using_the_personal_access_token.html)
 
 ## Argument Reference
 
