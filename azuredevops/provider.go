@@ -2,6 +2,8 @@ package azuredevops
 
 import (
 	"context"
+	"crypto"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -12,6 +14,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/hashicorp/terraform-plugin-log/tflog"
@@ -46,6 +49,7 @@ type HCPWorkloadToken struct {
 func Provider() *schema.Provider {
 	servicePrincipalAuthFields := []string{"sp_oidc_token", "sp_oidc_token_path", "sp_oidc_github_actions", "sp_oidc_hcp", "sp_client_certificate_path", "sp_client_certificate", "sp_client_secret", "sp_client_secret_path"}
 	allAuthFields := append([]string{"personal_access_token"}, servicePrincipalAuthFields...)
+
 	p := &schema.Provider{
 		ResourcesMap: map[string]*schema.Resource{
 			"azuredevops_resource_authorization":                 build.ResourceResourceAuthorization(),
@@ -336,7 +340,31 @@ func getGitHubOIDCToken(d *schema.ResourceData) (string, error) {
 	return response_interface.Value, nil
 }
 
-func getAuthToken(ctx context.Context, d *schema.ResourceData) (string, error) {
+type TokenGetter interface {
+	GetToken(ctx context.Context, opts policy.TokenRequestOptions) (azcore.AccessToken, error)
+}
+
+type AzIdentityFuncs interface {
+	NewClientAssertionCredential(tenantID, clientID string, getAssertion func(context.Context) (string, error), options *azidentity.ClientAssertionCredentialOptions) (TokenGetter, error)
+	NewClientCertificateCredential(tenantID string, clientID string, certs []*x509.Certificate, key crypto.PrivateKey, options *azidentity.ClientCertificateCredentialOptions) (TokenGetter, error)
+	NewClientSecretCredential(tenantID string, clientID string, clientSecret string, options *azidentity.ClientSecretCredentialOptions) (TokenGetter, error)
+}
+
+type AzIdentityFuncsReal struct{}
+
+func (a AzIdentityFuncsReal) NewClientAssertionCredential(tenantID, clientID string, getAssertion func(context.Context) (string, error), options *azidentity.ClientAssertionCredentialOptions) (TokenGetter, error) {
+	return azidentity.NewClientAssertionCredential(tenantID, clientID, getAssertion, options)
+}
+
+func (a AzIdentityFuncsReal) NewClientCertificateCredential(tenantID string, clientID string, certs []*x509.Certificate, key crypto.PrivateKey, options *azidentity.ClientCertificateCredentialOptions) (TokenGetter, error) {
+	return azidentity.NewClientCertificateCredential(tenantID, clientID, certs, key, options)
+}
+
+func (a AzIdentityFuncsReal) NewClientSecretCredential(tenantID string, clientID string, clientSecret string, options *azidentity.ClientSecretCredentialOptions) (TokenGetter, error) {
+	return azidentity.NewClientSecretCredential(tenantID, clientID, clientSecret, options)
+}
+
+func GetAuthToken(ctx context.Context, d *schema.ResourceData, azIdentityFuncs AzIdentityFuncs) (string, error) {
 	// Personal Access Token
 	if personal_access_token, ok := d.GetOk("personal_access_token"); ok {
 		tflog.Info(ctx, "Using personal access token for authentication")
@@ -346,22 +374,19 @@ func getAuthToken(ctx context.Context, d *schema.ResourceData) (string, error) {
 	tenantId := d.Get("sp_tenant_id").(string)
 	clientId := d.Get("sp_client_id").(string)
 	AzureDevOpsAppDefaultScope := "499b84ac-1321-427f-aa17-267ca6975798/.default"
-	opts := policy.TokenRequestOptions{
+	tokenOptions := policy.TokenRequestOptions{
 		Scopes: []string{AzureDevOpsAppDefaultScope},
 	}
 
+	var cred TokenGetter
+	var err error
+
 	// OIDC Token
 	if sp_oidc_token, ok := d.GetOk("sp_oidc_token"); ok {
-		cred, err := azidentity.NewClientAssertionCredential(tenantId, clientId, func(context.Context) (string, error) { return sp_oidc_token.(string), nil }, nil)
+		cred, err = azIdentityFuncs.NewClientAssertionCredential(tenantId, clientId, func(context.Context) (string, error) { return sp_oidc_token.(string), nil }, nil)
 		if err != nil {
 			return "", err
 		}
-		token, err := cred.GetToken(context.Background(), opts)
-		if err != nil {
-			return "", err
-		}
-
-		return token.Token, nil
 	}
 
 	// OIDC Token From File
@@ -370,16 +395,10 @@ func getAuthToken(ctx context.Context, d *schema.ResourceData) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		cred, err := azidentity.NewClientAssertionCredential(tenantId, clientId, func(context.Context) (string, error) { return strings.TrimSpace(string(fileBytes)), nil }, nil)
+		cred, err = azIdentityFuncs.NewClientAssertionCredential(tenantId, clientId, func(context.Context) (string, error) { return strings.TrimSpace(string(fileBytes)), nil }, nil)
 		if err != nil {
 			return "", err
 		}
-		token, err := cred.GetToken(context.Background(), opts)
-		if err != nil {
-			return "", err
-		}
-
-		return token.Token, nil
 	}
 
 	// OIDC Token in a GitHub Action Workflow
@@ -388,15 +407,10 @@ func getAuthToken(ctx context.Context, d *schema.ResourceData) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		cred, err := azidentity.NewClientAssertionCredential(tenantId, clientId, func(context.Context) (string, error) { return gitHubToken, nil }, nil)
+		cred, err = azIdentityFuncs.NewClientAssertionCredential(tenantId, clientId, func(context.Context) (string, error) { return gitHubToken, nil }, nil)
 		if err != nil {
 			return "", err
 		}
-		token, err := cred.GetToken(context.Background(), opts)
-		if err != nil {
-			return "", err
-		}
-		return token.Token, nil
 	}
 
 	// OIDC Token in a HashiCorp Vault run
@@ -412,7 +426,7 @@ func getAuthToken(ctx context.Context, d *schema.ResourceData) (string, error) {
 			workloadIdentityTokenUnmarshalled := HCPWorkloadToken{}
 			jwtParts := strings.Split(workloadIdentityToken, ".")
 			if len(jwtParts) != 3 {
-				return "", errors.New("Unable to split TFC_WORKLOAD_IDENTITY_TOKEN JWT")
+				return "", errors.New("Unable to split TFC_WORKLOAD_IDENTITY_TOKEN jwt")
 			}
 			tokenClaims, err := base64.StdEncoding.DecodeString(jwtParts[1])
 			if err != nil {
@@ -436,15 +450,10 @@ func getAuthToken(ctx context.Context, d *schema.ResourceData) (string, error) {
 			return "", errors.New(fmt.Sprintf("Either sp_client_id or sp_client_id_plan must be set when using Terraform Cloud Workload Identity Token authentication."))
 		}
 
-		cred, err := azidentity.NewClientAssertionCredential(tenantId, clientId, func(context.Context) (string, error) { return workloadIdentityToken, nil }, nil)
+		cred, err = azIdentityFuncs.NewClientAssertionCredential(tenantId, clientId, func(context.Context) (string, error) { return workloadIdentityToken, nil }, nil)
 		if err != nil {
 			return "", err
 		}
-		token, err := cred.GetToken(context.Background(), opts)
-		if err != nil {
-			return "", err
-		}
-		return token.Token, nil
 	}
 
 	// Certificate from a file on disk
@@ -464,17 +473,10 @@ func getAuthToken(ctx context.Context, d *schema.ResourceData) (string, error) {
 			return "", err
 		}
 
-		cred, err := azidentity.NewClientCertificateCredential(tenantId, clientId, certs, key, nil)
-
+		cred, err = azIdentityFuncs.NewClientCertificateCredential(tenantId, clientId, certs, key, nil)
 		if err != nil {
 			return "", err
 		}
-		token, err := cred.GetToken(context.Background(), opts)
-		if err != nil {
-			return "", err
-		}
-
-		return token.Token, nil
 	}
 
 	// Certificate from a base64 encoded string
@@ -491,30 +493,18 @@ func getAuthToken(ctx context.Context, d *schema.ResourceData) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		cred, err := azidentity.NewClientCertificateCredential(tenantId, clientId, certs, key, nil)
-
+		cred, err = azIdentityFuncs.NewClientCertificateCredential(tenantId, clientId, certs, key, nil)
 		if err != nil {
 			return "", err
 		}
-		token, err := cred.GetToken(context.Background(), opts)
-		if err != nil {
-			return "", err
-		}
-
-		return token.Token, nil
 	}
 
 	// Client Secret
 	if sp_client_secret, ok := d.GetOk("sp_client_secret"); ok {
-		cred, err := azidentity.NewClientSecretCredential(tenantId, clientId, sp_client_secret.(string), nil)
+		cred, err = azIdentityFuncs.NewClientSecretCredential(tenantId, clientId, sp_client_secret.(string), nil)
 		if err != nil {
 			return "", err
 		}
-		token, err := cred.GetToken(context.Background(), opts)
-		if err != nil {
-			return "", err
-		}
-		return token.Token, nil
 	}
 
 	// Client Secret from a file on disk
@@ -524,19 +514,18 @@ func getAuthToken(ctx context.Context, d *schema.ResourceData) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		cred, err := azidentity.NewClientSecretCredential(tenantId, clientId, strings.TrimSpace(string(fileBytes)), nil)
+		cred, err = azIdentityFuncs.NewClientSecretCredential(tenantId, clientId, strings.TrimSpace(string(fileBytes)), nil)
 		if err != nil {
 			return "", err
 		}
-		token, err := cred.GetToken(context.Background(), opts)
-		if err != nil {
-			return "", err
-		}
-		return token.Token, nil
 	}
 
-	// Should never reach this, but might as well provide a useful error message
-	return "", errors.New("No authentication method found.")
+	token, err := cred.GetToken(context.Background(), tokenOptions)
+	if err != nil {
+		return "", err
+	}
+
+	return token.Token, nil
 }
 
 func providerConfigure(p *schema.Provider) schema.ConfigureContextFunc {
@@ -548,7 +537,7 @@ func providerConfigure(p *schema.Provider) schema.ConfigureContextFunc {
 			terraformVersion = "0.11+compatible"
 		}
 
-		token, err := getAuthToken(ctx, d)
+		token, err := GetAuthToken(ctx, d, AzIdentityFuncsReal{})
 		if err != nil {
 			return nil, diag.FromErr(err)
 		}
