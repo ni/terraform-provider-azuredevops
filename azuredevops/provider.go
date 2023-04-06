@@ -17,7 +17,6 @@ import (
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	"github.com/hashicorp/terraform-plugin-log/tflog"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/validation"
@@ -367,7 +366,6 @@ func (a AzIdentityFuncsReal) NewClientSecretCredential(tenantID string, clientID
 func GetAuthToken(ctx context.Context, d *schema.ResourceData, azIdentityFuncs AzIdentityFuncs) (string, error) {
 	// Personal Access Token
 	if personal_access_token, ok := d.GetOk("personal_access_token"); ok {
-		tflog.Info(ctx, "Using personal access token for authentication")
 		return personal_access_token.(string), nil
 	}
 
